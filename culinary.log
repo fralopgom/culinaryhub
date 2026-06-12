@@ -1,0 +1,1476 @@
+# CULINARY HUB — LOG TÉCNICO
+# Última actualización: 2026-06-12
+
+────────────────────────────────────────────────────────────────
+## ESTADO ACTUAL
+────────────────────────────────────────────────────────────────
+
+  CI          ✓  typecheck + build verde en GitHub Actions
+  CD          ✓  deploy self-hosted (runner qnap-nas, ARM64) operativo
+  App         ✓  http://192.168.178.30:3001 responde 200
+  Schema DB   ✓  migraciones 001-003 aplicadas en culinaryhub (PostgreSQL NAS)
+  Auth código ✓  wallet + OAuth implementados
+  URL pública ✗  no existe — OAuth roto, app solo accesible en LAN
+
+
+────────────────────────────────────────────────────────────────
+## INFRAESTRUCTURA
+────────────────────────────────────────────────────────────────
+
+  Repo          https://github.com/fralopgom/culinaryhub
+  Imagen        ghcr.io/fralopgom/culinaryhub (multi-arch: amd64 + arm64)
+  NAS SSH       paco@192.168.178.30
+  Docker binary /share/CACHEDEV1_DATA/.qpkg/container-station/usr/bin/.libs/docker
+  Contenedor    culinaryhub  →  puerto 3001:3000
+  Env file      /share/CACHEDEV1_DATA/culinaryhub/app.env
+  Runner CI/CD  gh-runner-culinaryhub (contenedor Docker, self-hosted, ARM64)
+  PostgreSQL    contenedor mycert  →  192.168.178.87:5432  user=paco  pass=1012  db=culinaryhub
+
+
+────────────────────────────────────────────────────────────────
+## DEUDA TÉCNICA — PARA QUEDAR OPERATIVO
+────────────────────────────────────────────────────────────────
+
+  T-1  [CRÍTICO] Cloudflare Tunnel
+       Sin URL pública HTTPS los callbacks OAuth son imposibles.
+       Desbloquea T-2, T-3, T-4, T-6, T-8 en cascada.
+
+  T-2  [CRÍTICO] GitHub OAuth App
+       Crear en github.com/settings/developers.
+       Callback URL: https://<dominio-tunnel>/api/auth/github/callback
+       Depende de: T-1
+
+  T-3  [CRÍTICO] Secrets OAuth en GitHub Secrets
+       GOOGLE_CLIENT_ID       → ya disponible (ver backend.env de Sygnet)
+       GOOGLE_CLIENT_SECRET   → ya disponible (ver backend.env de Sygnet)
+       CULINARYHUB_GITHUB_CLIENT_ID     → pendiente de T-2
+       CULINARYHUB_GITHUB_CLIENT_SECRET → pendiente de T-2
+       Depende de: T-2
+
+  T-4  [CRÍTICO] Google OAuth — añadir redirect URI
+       Ir a console.cloud.google.com → credenciales OAuth → añadir:
+       https://<dominio-tunnel>/api/auth/google/callback
+       Depende de: T-1
+
+  T-5  [IMPORTANTE] Marcar admin en DB
+       Ejecutar UNA VEZ tras el primer login de efelgisp@gmail.com:
+         docker exec -it mycert psql -U paco -d culinaryhub \
+           -c "UPDATE users SET is_admin=true WHERE email='efelgisp@gmail.com';"
+
+  T-6  [IMPORTANTE] SYGNET_API_URL apunta a IP interna
+       Valor actual: http://192.168.178.87:8001  (solo funciona en LAN)
+       Valor correcto: https://mycert.myqnapcloud.com:8443
+       Cambiar en GitHub Secret CULINARYHUB_SYGNET_API_URL y hacer push.
+
+  T-7  [MENOR] 4 Svelte 5 runes warnings en layout files
+       No rompen build (--threshold error los filtra) pero son deuda.
+       Patterns de migración a runes pendientes.
+
+
+────────────────────────────────────────────────────────────────
+## PENDIENTE DE VALIDAR (post-OAuth)
+────────────────────────────────────────────────────────────────
+
+  T-8  Testear flujo OAuth completo: Google login → callback → sesión → perfil → logout
+  T-9  Testear wallet connect: MetaMask → firma → sygnet_session → upsert tabla users
+  T-10 Seed de datos: sin culturas/ingredientes el explorador está vacío
+  T-11 Validar layout en móvil
+  T-12 Proceso de rotación de SYGNET_SUITE_KEY (ahora generada manualmente sin procedimiento)
+
+
+────────────────────────────────────────────────────────────────
+## ORDEN RECOMENDADO PRÓXIMA SESIÓN
+────────────────────────────────────────────────────────────────
+
+  1. T-1  Cloudflare Tunnel → obtener dominio público
+  2. T-4  Google OAuth: añadir nuevo redirect URI
+  3. T-2  Crear GitHub OAuth App con el dominio
+  4. T-3  Añadir los 4 secrets OAuth a GitHub
+  5. T-6  Actualizar SYGNET_API_URL en GitHub Secrets
+  6.      Push → CD → verificar deploy verde
+  7. T-5  Marcar admin en DB
+  8. T-8  Testear flujo OAuth Google
+  9. T-9  Testear wallet connect
+  10. T-10 Script seed culturas + ingredientes base
+
+
+────────────────────────────────────────────────────────────────
+## NOTAS ARQUITECTURA
+────────────────────────────────────────────────────────────────
+
+  Auth dual:
+    culinaryhub_session (cookie httpOnly, OAuth nativo, 30d) — precedencia
+    sygnet_session (cookie Sygnet, wallet Ethereum) — fallback
+    Wallet: gratis, MetaMask firma client-side, sin txs on-chain.
+    Admin: columna is_admin en DB (no env var).
+
+  Sessions:
+    Tabla sessions en PostgreSQL — token 64-char hex aleatorio.
+    Upsert automático de usuarios wallet en tabla users.
+
+  OAuth providers implementados:
+    Google  — credenciales en backend.env de Sygnet (reutilizables)
+    GitHub  — app pendiente de crear
+
+  DB schema:
+    Migraciones 001 (schema inicial), 002 (is_banned), 003 (OAuth + sessions)
+    Columna users.address (no ethereum_address) — corregido en 001_initial.sql
+# Culinary Hub — Documento de estrategia y diseño
+_Iniciado: 2026-06-12_
+
+---
+
+## 1. Visión y origen
+
+Culinary Hub nace como segundo proyecto de la suite Sygnet. La filosofía base es idéntica:
+descentralizada, automantenida, coste de operación cercano a cero.
+
+**Propósito:** repositorio de recetas culinarias orientado a la preservación de culturas gastronómicas
+en riesgo de desaparecer. La comunidad construye prestigio mediante meritocracia: quien más y mejor
+aporta, más peso tiene en el ecosistema.
+
+**Motivación adicional del fundador:** salir de la zona de confort tecnológica (HTML+JS+Python+PostgreSQL)
+adoptando un framework moderno como primer lenguaje de la suite ampliada.
+
+---
+
+## 2. Posición en la suite Sygnet
+
+Culinary Hub no es un proyecto independiente: es el segundo nodo de una suite de productos que
+comparten capa de identidad y reputación.
+
+```
+sygnet.app                    ← producto principal (autenticidad de contenido digital)
+    │
+    ├── /api/auth             ← login, sesión, wallet connect
+    ├── /api/prestige         ← score por Ethereum address
+    └── /api/certify          ← firma de contenido (hash + nivel AI)
+
+culinaryhub.sygnet.app        ← segundo nodo de la suite
+    │
+    ├── consume Sygnet API para auth, identidad y prestigio
+    ├── DB propia (mismo PostgreSQL, schema independiente)
+    └── deploy pipeline propio
+```
+
+### Relación técnica con Sygnet
+
+- **Repos separados.** Culinary Hub tiene su propio repositorio git.
+- **Deploys independientes.** Un fallo en Culinary Hub no afecta a Sygnet.
+- **Schema propio.** Misma instancia PostgreSQL, pero tablas propias (`recipes`, `cultures`,
+  `ratings`, `flags`, etc.).
+- **Sygnet como proveedor de servicios.** Culinary Hub consume los endpoints de Sygnet.
+  Sygnet no sabe ni le importa quién lo consume.
+- **Dominio actual:** `culinaryhub.sygnet.app`. Dominio propio previsto para fase de crecimiento.
+
+### Endpoints que Sygnet debe exponer para la suite
+
+| Endpoint | Descripción |
+|---|---|
+| `GET /api/identity/{address}` | Perfil de identidad por address Ethereum |
+| `GET /api/prestige/{address}` | Score de prestigio consolidado |
+| `POST /api/certify` | Firma de hash de contenido (receta) |
+| `POST /api/auth/session` | Sesión compartida entre nodos |
+
+---
+
+## 3. Stack tecnológico
+
+| Capa | Tecnología | Razón |
+|---|---|---|
+| Frontend | **SvelteKit** | Ruptura con zona de confort. Framework moderno, full-stack, reactivo. Excelente para sitios de contenido con comunidad. |
+| Backend/API | SvelteKit API routes | Mismo repo, misma tecnología. Sin Python adicional. |
+| Base de datos | PostgreSQL | Mismo motor que Sygnet, schema independiente. |
+| Identidad | Ethereum + ethers.js | Reciclado de Sygnet. Wallet opcional. |
+| Auth | Sygnet API | No se reimplementa. Se consume. |
+| Deploy | Vercel / Netlify free tier | Coste ≈ 0. |
+| CI/CD | GitHub Actions | Fork del pipeline de Sygnet. |
+
+### Por qué SvelteKit y no Rust
+
+Rust fue analizado y descartado para esta fase. Razones:
+
+- La curva de aprendizaje del borrow checker frenaría la fase de exploración de producto.
+- El ecosistema web de Rust (Leptos, Yew) es inmaduro comparado con SvelteKit.
+- La compilación Rust es lenta — mala experiencia de iteración rápida.
+- SvelteKit ya supone un salto tecnológico significativo y productivo.
+
+Rust puede tener sentido en el futuro para un microservicio específico de alto rendimiento
+(ej: verificador de firmas que procese millones de documentos), pero no como stack principal ahora.
+
+---
+
+## 4. Modelo de acceso y usuarios
+
+### Acceso totalmente abierto — solo lectura
+
+Navegar, leer, buscar y descubrir recetas no requiere cuenta ni wallet. Barrera de entrada cero.
+
+### Wallet obligatoria para contribuir
+
+La publicación anónima fue descartada por vulnerabilidad de diseño demostrable:
+1.000 bots × 1 receta/día superan la capacidad de moderación comunitaria en días,
+haciendo la plataforma inutilizable por acumulación de basura. Turnstile y honeypots
+ralentizan pero no resuelven — los servicios de bypass cuestan ~1€/1.000 CAPTCHAs.
+
+La wallet no es registro tradicional: es identidad pseudónima, gratuita y soberana.
+Consistente con la filosofía del proyecto.
+
+| Sin wallet | Con wallet (wallet_tier ≥ 1) |
+|---|---|
+| Navega y lee recetas | Publica recetas (máx 3/día) |
+| No puede publicar | Firma autoría con hash |
+| No puede votar ni flaggear | Acumula y ejerce prestigio |
+| Invisible en rankings | Aparece en leaderboard cultural |
+
+**wallet_tier requerido para publicar: ≥ 1** (wallet con ≥ 7 días de antigüedad) — producción.
+
+### Configuración alpha vs producción
+
+| Parámetro | Alpha (ramping up) | Producción |
+|---|---|---|
+| Wallet para publicar | **Obligatoria — inamovible** | **Obligatoria — inamovible** |
+| wallet_tier mínimo | 0 (cualquier wallet) | 1 (≥ 7 días) |
+| Recetas/día por wallet | 10 | 3 (tier 1) / 10 (prestigio) |
+| Umbral de flags para ocultar | 3 flags | 5 flags ponderados |
+| Cron de detección Sybil | Desactivado | Activo |
+| Turnstile | Desactivado | Activo en conexión de wallet |
+| Rate limiting global | 500 req/min por IP | 200 req/min por IP |
+
+Los parámetros viven en variables de entorno — cambiar de alpha a producción es un deploy, no un cambio de código.
+
+---
+
+## 5. Mapa de usuarios y mercados
+
+Culinary Hub tiene su mercado propio, independiente del de Sygnet. La suite no canibaliza —
+amplía.
+
+```
+Sygnet                         Culinary Hub
+─────────────────────────────────────────────────────
+Creadores digitales            Cocineros / familias
+Periodistas                    Comunidades diáspora
+Artistas                       Etnógrafos amateur
+Desarrolladores                Foodie influencers
+Documentalistas                Antropólogos
+          │                           │
+          └──────── SOLAPE ───────────┘
+               YouTubers gastronómicos
+               Documentalistas culinarios
+               Chefs con marca personal
+               Creadores de contenido cultural
+```
+
+### El usuario puente: YouTuber gastronómico
+
+```
+En Sygnet:     firma sus vídeos como "contenido auténtico, sin IA"
+               → construye reputación como creador verificado
+
+En Culinary Hub: publica la receta de la abuela con certificación cultural
+               → su audiencia descubre el sello Sygnet
+
+Resultado:     un solo usuario amplifica ambas plataformas sin esfuerzo adicional
+```
+
+---
+
+## 6. Sistema de prestigio unificado
+
+El prestigio es **cross-platform pero único por address Ethereum**. Un solo score que refleja
+toda la actividad del usuario en la suite.
+
+| Acción | Plataforma | Efecto en prestigio |
+|---|---|---|
+| Certifica vídeo/documento auténtico | Sygnet | +prestige |
+| Publica receta cultural | Culinary Hub | +prestige |
+| Receta valorada positivamente | Culinary Hub | +prestige |
+| Receta certificada como auténtica | Culinary Hub | +prestige boost |
+| Endorsement de experto culinario | Culinary Hub | +prestige boost |
+| Antigüedad + volumen en la suite | Ambas | multiplicador |
+| Flagging confirmado como correcto | Culinary Hub | +prestige (moderador) |
+
+### Badges cross-platform
+
+- En Sygnet: badge **"Preservador Cultural"** si el usuario tiene recetas certificadas en Culinary Hub.
+- En Culinary Hub: badge **"Creador Verificado"** si el usuario tiene certificaciones en Sygnet.
+
+---
+
+## 7. Moderación de contenido
+
+El sistema abierto introduce tres amenazas que requieren soluciones distintas.
+
+### Amenaza 1: Plagio externo
+Recetas copiadas de libros, webs o culturas sin atribución.
+
+**Solución:** hash del contenido de la receta al publicar. Si el hash ya existe en el sistema,
+se detecta. El primer publicador con wallet tiene prioridad de autoría.
+
+### Amenaza 2: Canibalismo interno
+Un usuario copia la receta de otro usuario del hub y la republica como propia.
+
+**Solución:** mismo mecanismo de hash. Sin wallet = sin autoría registrada = sin protección.
+Esto refuerza el incentivo para conectar wallet.
+
+### Amenaza 3: Contenido dañino
+Síntesis peligrosa, instrucciones ilegales o contenido inapropiado disfrazado de receta.
+
+**Solución:** moderación comunitaria con peso por prestigio.
+
+```
+Usuario sin wallet        → puede ver contenido, no puede flaggear
+Usuario con wallet        → puede flaggear (peso base: 1)
+Usuario con prestigio     → flag tiene peso multiplicado por score
+Umbral de flags ponderados → contenido entra en revisión / se oculta automáticamente
+```
+
+No hay moderación centralizada. La comunidad con skin-in-the-game (wallet + historial)
+gobierna la calidad del contenido. A mayor prestigio, mayor responsabilidad y mayor poder.
+
+---
+
+## 8. Fases de implantación
+
+### Fase 0 — Preparar Sygnet como proveedor (antes del lanzamiento)
+- Exponer endpoints `/api/prestige`, `/api/identity` en Sygnet backend.
+- Documentar contrato de API interna de la suite.
+- No romper nada existente en Sygnet.
+
+### Fase 1 — Lanzamiento Culinary Hub
+- Culinary Hub funciona 100% sin Sygnet activo: browse, publicación anónima, búsqueda.
+- Usuarios con wallet ven su prestigio Sygnet importado como ventaja inicial ("early adopter").
+- Deploy en `culinaryhub.sygnet.app`.
+
+### Fase 2 — Cross-promotion
+- Badge "Preservador Cultural" aparece en perfiles Sygnet.
+- Badge "Creador Verificado" aparece en perfiles Culinary Hub.
+- Notificaciones cruzadas opcionales.
+
+### Fase 3 — Suite visible
+- Landing page común que presenta ambos productos como ecosistema coherente.
+- Posible migración a dominio propio (`culinaryhub.com` o similar).
+
+---
+
+## 9. Leyes de desarrollo — Reglas raíz
+
+Obligatorias en todo trabajo sobre este proyecto. No son sugerencias.
+
+1. No leer el mismo archivo dos veces en la misma sesión.
+2. No escanear ni resumir el repositorio entero al inicio.
+3. Respuestas concisas: sin relleno conversacional, sin preámbulos.
+4. Siempre edits pequeños y dirigidos; nunca reescribir archivos enteros salvo causa mayor.
+
+Cuando el proyecto tenga repo propio, estas reglas van al `CLAUDE.md`.
+
+---
+
+## 10. Internacionalización (i18n) — Decisión raíz
+
+**Principio no negociable:** cero texto hardcodeado en componentes. Todo string visible al usuario
+vive en archivos de traducción. Esta es una lección directa de Sygnet, donde el español se
+introdujo como lenguaje natural en el código y la i18n se tuvo que retrofitar.
+
+### Idiomas
+- **Español** — idioma fuente y de desarrollo natural.
+- **Inglés** — segunda lengua desde el día 0.
+- Arquitectura preparada para añadir un tercero con un solo archivo JSON.
+
+### Librería elegida: Paraglide-JS (Inlang)
+
+Elegida sobre `svelte-i18n` por ser la solución moderna nativa para SvelteKit:
+
+| Característica | Paraglide-JS | svelte-i18n |
+|---|---|---|
+| Type-safe (TypeScript) | Sí — mensajes como funciones | No |
+| Compile-time / tree-shakeable | Sí | No |
+| Adapter oficial SvelteKit | Sí | No |
+| Autocomplete en IDE | Sí | No |
+| Madurez | Nuevo pero estable | Más battle-tested |
+
+### Estructura de archivos
+
+```
+src/
+  lib/
+    i18n/
+      messages/
+        es.json     ← fuente (idioma natural de desarrollo)
+        en.json     ← traducción
+  routes/
+    [lang]/         ← prefijo de idioma en URL (/es/... o /en/...)
+      +layout.svelte
+      +page.svelte
+```
+
+### Convención de desarrollo obligatoria
+
+```svelte
+<!-- ❌ Prohibido: texto hardcodeado -->
+<h1>Bienvenido a Culinary Hub</h1>
+
+<!-- ✅ Correcto: siempre desde el archivo de mensajes -->
+<h1>{m.welcome_title()}</h1>
+```
+
+```json
+// es.json
+{
+  "welcome_title": "Bienvenido a Culinary Hub",
+  "nav_recipes": "Recetas",
+  "nav_cultures": "Culturas"
+}
+
+// en.json
+{
+  "welcome_title": "Welcome to Culinary Hub",
+  "nav_recipes": "Recipes",
+  "nav_cultures": "Cultures"
+}
+```
+
+### Cambio de idioma
+
+- URL-based: `/es/recetas` ↔ `/en/recipes` — SEO-friendly, enlazable, sin estado oculto.
+- Un único `setLocale('en')` cambia todo el sitio.
+- Añadir idioma nuevo = crear `fr.json` + declararlo en config. Sin tocar componentes.
+
+### Aplicación a emails, metadatos y errores
+
+La regla aplica también a:
+- Meta tags (`<title>`, `<description>`) — i18n
+- Mensajes de error de API — i18n
+- Emails transaccionales — plantillas por idioma
+- Textos de validación de formularios — i18n
+
+---
+
+## 10. Pendientes y decisiones abiertas
+
+- [ ] Reservar dominio propio (futuro, sin urgencia).
+- [x] Diseñar schema de base de datos — ver sección 12.
+- [ ] ⚠️ PROBLEMA ABIERTO: detección de plagio real — hash solo cubre duplicados exactos; parafraseo, sinónimos y reordenación de pasos son indetectables sin similitud semántica (embeddings) o revisión humana.
+- [x] Definir contrato exacto de la API que Sygnet debe exponer — ver sección 13.
+- [x] Diseñar estructura del proyecto SvelteKit — ver sección 14.
+- [x] Estructura de `es.json` y `en.json` definida — ver sección 14.
+- [ ] Decidir si el hash de receta se firma on-chain o solo off-chain en esta fase.
+- [x] Definir el modelo de "cultura": taxonomía cerrada jerárquica + tags libres (ver sección 12).
+- [x] Versioning de recetas — schema actualizado en sección 12.
+- [x] Licencia de contenido: CC BY-SA — ver sección 18.
+- [x] Sistema de notificaciones in-app (estilo chat Sygnet) — ver sección 18.
+- [ ] Cold start / seed content — problema para el Claude del futuro, trabajar antes del alpha.
+- [x] SEO + metadatos dinámicos — must have, ver sección 18.
+- [x] PWA — must have en scaffold, ver sección 18.
+- [x] Búsqueda — PostgreSQL tsvector minimalista, schema actualizado en sección 12.
+
+---
+
+## 12. Schema de base de datos
+
+### Decisiones de diseño
+
+- `users.ethereum_address` nullable — wallet opcional, no obligatoria.
+- `recipes.author_id` nullable — publicación anónima permitida; sin wallet = sin protección de autoría.
+- `recipes.content_hash` siempre calculado; `signature` solo si hay wallet.
+- `cultures` jerárquica (continente → país → región) + `tags` libres por receta — lo mejor de ambos modelos.
+- `prestige_events` como log append-only — auditable, reversible, fuente de verdad del score.
+- `ratings` y `flags` almacenan snapshot del `prestige_weight` del votante en el momento de la acción — el peso ponderado no cambia retroactivamente.
+- `sygnet_prestige_cache` evita llamar a la API de Sygnet en cada carga de página.
+
+---
+
+```sql
+-- ─────────────────────────────────────────
+-- IDENTIDAD
+-- ─────────────────────────────────────────
+
+CREATE TABLE users (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ethereum_address    VARCHAR(42) UNIQUE,          -- nullable: wallet opcional; no email almacenado
+    username            VARCHAR(50) UNIQUE NOT NULL,
+    locale              VARCHAR(5) NOT NULL DEFAULT 'es',
+    prestige_score      INTEGER NOT NULL DEFAULT 0,  -- cache calculado desde prestige_events
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- Sin email: política zero-trust, sin notificaciones
+);
+
+-- Prestigio importado desde Sygnet (cache para no llamar la API en cada request)
+CREATE TABLE sygnet_prestige_cache (
+    ethereum_address    VARCHAR(42) PRIMARY KEY,
+    prestige_score      INTEGER NOT NULL DEFAULT 0,
+    last_synced_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+-- ─────────────────────────────────────────
+-- TAXONOMÍA CULTURAL (cerrada + jerárquica)
+-- ─────────────────────────────────────────
+
+CREATE TABLE cultures (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug            VARCHAR(100) UNIQUE NOT NULL,
+    name_es         VARCHAR(200) NOT NULL,
+    name_en         VARCHAR(200) NOT NULL,
+    description_es  TEXT,
+    description_en  TEXT,
+    parent_id       UUID REFERENCES cultures(id),   -- continente → país → región
+    level           SMALLINT NOT NULL DEFAULT 0,     -- 0=continente, 1=país, 2=región
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+-- ─────────────────────────────────────────
+-- INGREDIENTES
+-- ─────────────────────────────────────────
+
+CREATE TABLE ingredients (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug        VARCHAR(100) UNIQUE NOT NULL,
+    name_es     VARCHAR(200) NOT NULL,
+    name_en     VARCHAR(200) NOT NULL,
+    category    VARCHAR(100)
+);
+
+
+-- ─────────────────────────────────────────
+-- RECETAS
+-- ─────────────────────────────────────────
+
+CREATE TYPE recipe_status AS ENUM ('draft', 'published', 'flagged', 'hidden');
+CREATE TYPE difficulty     AS ENUM ('easy', 'medium', 'hard');
+CREATE TYPE ai_level       AS ENUM ('none', 'assisted', 'generated', 'mixed');
+
+CREATE TABLE recipes (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug                    VARCHAR(200) UNIQUE NOT NULL,
+    author_id               UUID NOT NULL REFERENCES users(id), -- wallet obligatoria para publicar
+    culture_id              UUID REFERENCES cultures(id),
+    title                   VARCHAR(300) NOT NULL,
+    description             VARCHAR(1000),                   -- límite explícito: ~1KB
+    instructions            JSONB NOT NULL DEFAULT '[]',     -- array de pasos; máx 10KB total por receta
+    prep_time_min           SMALLINT,
+    cook_time_min           SMALLINT,
+    servings                SMALLINT,
+    difficulty              difficulty,
+    ai_level                ai_level NOT NULL DEFAULT 'none',
+    content_hash            VARCHAR(66) NOT NULL,
+    version                 SMALLINT NOT NULL DEFAULT 1,
+    status                  recipe_status NOT NULL DEFAULT 'draft',
+    search_vector           tsvector,                        -- para búsqueda full-text
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Historial de versiones: cada edición crea una fila aquí
+-- La firma y cert Sygnet son por versión, no por receta
+CREATE TABLE recipe_versions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id       UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    version         SMALLINT NOT NULL,
+    title           VARCHAR(300) NOT NULL,
+    description     VARCHAR(1000),
+    instructions    JSONB NOT NULL,
+    content_hash    VARCHAR(66) NOT NULL,
+    signature       VARCHAR(132),                            -- firma Ethereum de esta versión
+    sygnet_cert_id  VARCHAR(100),                            -- cert Sygnet de esta versión
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (recipe_id, version)
+);
+-- Una vez que una versión tiene sygnet_cert_id, es inmutable.
+-- Editar una receta certificada crea version+1 sin certificación.
+
+CREATE UNIQUE INDEX idx_recipes_content_hash ON recipes(content_hash);
+CREATE INDEX idx_recipes_search ON recipes USING GIN(search_vector);
+
+-- Trigger para mantener search_vector actualizado
+CREATE FUNCTION recipes_search_update() RETURNS trigger AS $$
+BEGIN
+  NEW.search_vector := to_tsvector('spanish', NEW.title || ' ' || COALESCE(NEW.description, ''));
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+CREATE TRIGGER recipes_search_trigger
+  BEFORE INSERT OR UPDATE ON recipes
+  FOR EACH ROW EXECUTE FUNCTION recipes_search_update();
+
+CREATE UNIQUE INDEX idx_recipes_content_hash ON recipes(content_hash);  -- anti-duplicado exacto (NO es anti-plagio — problema abierto)
+
+-- Fingerprint de ingredientes: keccak256 del array ordenado de ingredient_id (sin cantidades ni unidades)
+-- Avisa al publicar si otra receta tiene exactamente los mismos ingredientes. No bloquea.
+ALTER TABLE recipes ADD COLUMN ingredients_fingerprint VARCHAR(66);
+CREATE INDEX idx_recipes_ingredients_fingerprint ON recipes(ingredients_fingerprint);
+
+CREATE TABLE recipe_ingredients (
+    recipe_id   UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    ingredient_id UUID NOT NULL REFERENCES ingredients(id),
+    quantity    VARCHAR(50),
+    unit        VARCHAR(50),
+    notes_es    VARCHAR(300),
+    notes_en    VARCHAR(300),
+    sort_order  SMALLINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (recipe_id, ingredient_id)
+);
+
+CREATE TABLE recipe_tags (
+    recipe_id   UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    tag         VARCHAR(100) NOT NULL,
+    PRIMARY KEY (recipe_id, tag)
+);
+
+
+-- ─────────────────────────────────────────
+-- COMUNIDAD: VALORACIONES
+-- ─────────────────────────────────────────
+
+CREATE TABLE ratings (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id           UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    user_id             UUID NOT NULL REFERENCES users(id),
+    score               SMALLINT NOT NULL CHECK (score BETWEEN 1 AND 5),
+    note                TEXT,
+    prestige_weight     INTEGER NOT NULL DEFAULT 1,  -- snapshot del prestigio al votar
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (recipe_id, user_id)
+);
+
+
+-- ─────────────────────────────────────────
+-- COMUNIDAD: MODERACIÓN
+-- ─────────────────────────────────────────
+
+CREATE TYPE flag_reason AS ENUM ('plagiarism', 'dangerous', 'inappropriate', 'duplicate');
+CREATE TYPE flag_status AS ENUM ('pending', 'confirmed', 'dismissed');
+
+CREATE TABLE flags (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id           UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    user_id             UUID NOT NULL REFERENCES users(id),
+    reason              flag_reason NOT NULL,
+    detail              TEXT,
+    prestige_weight     INTEGER NOT NULL DEFAULT 1,  -- snapshot al momento del flag
+    status              flag_status NOT NULL DEFAULT 'pending',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (recipe_id, user_id)
+);
+
+-- Vista para calcular peso total de flags por receta (umbral de ocultación automática)
+CREATE VIEW recipe_flag_weight AS
+    SELECT recipe_id, SUM(prestige_weight) AS total_weight, COUNT(*) AS flag_count
+    FROM flags WHERE status = 'pending'
+    GROUP BY recipe_id;
+
+
+-- ─────────────────────────────────────────
+-- COMUNIDAD: ENDORSEMENTS
+-- ─────────────────────────────────────────
+
+CREATE TABLE endorsements (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id       UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    endorser_id     UUID NOT NULL REFERENCES users(id),
+    note            TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (recipe_id, endorser_id)
+);
+
+
+-- ─────────────────────────────────────────
+-- PRESTIGIO: LOG DE EVENTOS
+-- ─────────────────────────────────────────
+
+CREATE TYPE prestige_source AS ENUM (
+    'sygnet_import',
+    'recipe_published',
+    'recipe_rated_positive',
+    'endorsement_received',
+    'flag_confirmed',
+    'account_age_bonus'
+);
+
+CREATE TABLE prestige_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    source          prestige_source NOT NULL,
+    points          SMALLINT NOT NULL,
+    reference_id    UUID,                -- apunta a recipe, endorsement, flag, etc.
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- users.prestige_score se recalcula como SUM(points) FROM prestige_events WHERE user_id = ?
+```
+
+---
+
+### Diagrama de entidades
+
+```
+users ──────────────────────────────────────────┐
+  │ author_id                                    │ endorser_id / user_id
+  ↓                                              ↓
+recipes ←── recipe_ingredients ──→ ingredients  endorsements
+  │    ←── recipe_tags                           ratings
+  │    ←── flags                                 prestige_events
+  ↓
+cultures (jerárquica: continente→país→región)
+
+sygnet_prestige_cache (sincronizado desde Sygnet API por ethereum_address)
+```
+
+---
+
+## 13. Contrato de API Sygnet → suite
+
+Sygnet actúa como proveedor de identidad y prestigio para todos los nodos de la suite.
+Culinary Hub consume estos endpoints desde su backend (server-to-server) y desde el cliente
+solo donde el dato es público.
+
+### Autenticación entre servicios
+
+Dos niveles:
+
+| Tipo | Mecanismo | Uso |
+|---|---|---|
+| Server-to-server | Header `X-Suite-Key: <api_key>` (env var) | Sygnet verifica que el llamante es un nodo autorizado de la suite |
+| Sesión de usuario | Cookie `sygnet_session` en dominio `.sygnet.app` | Compartida automáticamente entre `sygnet.app` y `culinaryhub.sygnet.app` — ver flags de seguridad obligatorias |
+
+La cookie de sesión en `.sygnet.app` es suficiente para que Culinary Hub sepa que el usuario
+está autenticado sin reimplementar login.
+
+**Flags obligatorias en la cookie:**
+```
+HttpOnly; Secure; SameSite=Lax; Domain=.sygnet.app
+```
+- `HttpOnly` — JS nunca puede leerla. Elimina XSS como vector de robo de sesión.
+- `Secure` — solo viaja por HTTPS.
+- `SameSite=Lax` — protege contra CSRF.
+- `Domain=.sygnet.app` — solo subdominios propios.
+
+**Riesgo residual:** subdomain takeover — si un subdominio de `sygnet.app` apunta a un recurso
+expirado, un atacante podría reclamarlo y recibir la cookie. Mitigación: auditar periódicamente
+que todos los subdominios apuntan a recursos activos. Alternativa futura más estricta: JWT por
+header `Authorization: Bearer` (elimina este vector pero añade complejidad).
+
+---
+
+### Endpoints que Sygnet debe implementar
+
+---
+
+#### `GET /api/suite/identity/{address}`
+
+Devuelve el perfil público de un address Ethereum.
+Público — no requiere autenticación.
+
+**Response 200**
+```json
+{
+  "address": "0xabc...123",
+  "username": "paco.eth",
+  "member_since": "2025-03-01T00:00:00Z",
+  "certifications_count": 42
+}
+```
+
+**Response 404** — address no registrado en Sygnet.
+
+---
+
+#### `GET /api/suite/prestige/{address}`
+
+Devuelve el score de prestigio acumulado en Sygnet para un address.
+Público — no requiere autenticación.
+
+**Response 200**
+```json
+{
+  "address": "0xabc...123",
+  "prestige_score": 380,
+  "breakdown": {
+    "certifications": 300,
+    "endorsements": 60,
+    "account_age": 20
+  },
+  "computed_at": "2026-06-12T10:00:00Z"
+}
+```
+
+Culinary Hub cachea esta respuesta en `sygnet_prestige_cache` con TTL de 1h.
+
+---
+
+#### `POST /api/suite/session/verify`
+
+Verifica que una `sygnet_session` cookie es válida y devuelve la identidad del usuario.
+Llamada server-to-server. Requiere `X-Suite-Key`.
+
+**Request**
+```json
+{ "session_token": "<valor de la cookie sygnet_session>" }
+```
+
+**Response 200**
+```json
+{
+  "valid": true,
+  "address": "0xabc...123",
+  "username": "paco.eth",
+  "prestige_score": 380
+}
+```
+
+**Response 401**
+```json
+{ "valid": false }
+```
+
+---
+
+#### `POST /api/suite/certify`
+
+Registra una certificación Sygnet para una receta. El usuario firma el hash del contenido
+con su wallet. Culinary Hub delega la firma a Sygnet para mantener la UX consistente.
+Requiere sesión válida del usuario + `X-Suite-Key`.
+
+**Request**
+```json
+{
+  "content_hash": "0xabc...def",
+  "content_type": "culinaryhub_recipe",
+  "reference_id": "<recipe_uuid>",
+  "ai_level": "none"
+}
+```
+
+**Response 201**
+```json
+{
+  "cert_id": "sygnet_cert_abc123",
+  "signature": "0x...",
+  "address": "0xabc...123",
+  "timestamp": "2026-06-12T10:05:00Z",
+  "tx_hash": null
+}
+```
+
+`tx_hash` es null si la certificación es off-chain en esta fase.
+Culinary Hub guarda `cert_id` en `recipes.sygnet_cert_id`.
+
+---
+
+### Lo que Sygnet NO necesita saber
+
+- Qué es una receta.
+- Qué hace Culinary Hub con el prestigio.
+- Cuántos nodos consumen su API.
+
+Sygnet expone identidad, prestigio y firma. La semántica es de cada nodo.
+
+---
+
+### Variables de entorno necesarias en Culinary Hub
+
+```
+SYGNET_API_URL=https://sygnet.app
+SYGNET_SUITE_KEY=<api_key_generada_en_sygnet>
+```
+
+---
+
+## 14. Estructura del proyecto SvelteKit
+
+### Árbol de directorios
+
+```
+culinaryhub/
+├── CLAUDE.md                          ← leyes del proyecto (sección 9)
+├── .env                               ← SYGNET_API_URL, SYGNET_SUITE_KEY, DATABASE_URL
+├── .env.example
+├── package.json
+├── svelte.config.js
+├── vite.config.ts
+├── tsconfig.json
+│
+├── messages/                          ← fuente de verdad i18n (NUNCA auto-generado)
+│   ├── es.json                        ← idioma natural de desarrollo
+│   └── en.json
+│
+├── project.inlang/
+│   └── settings.json                  ← configuración Paraglide-JS
+│
+└── src/
+    ├── app.html                       ← shell HTML, sin texto hardcodeado
+    ├── app.css                        ← estilos globales
+    │
+    ├── paraglide/                     ← AUTO-GENERADO por Paraglide, en .gitignore
+    │
+    ├── lib/
+    │   ├── server/                    ← solo ejecutable en servidor (nunca en cliente)
+    │   │   ├── db.ts                  ← cliente PostgreSQL (postgres.js)
+    │   │   ├── sygnet.ts              ← llamadas a Sygnet API (X-Suite-Key)
+    │   │   └── prestige.ts            ← recálculo y sincronización de scores
+    │   │
+    │   ├── components/
+    │   │   ├── RecipeCard.svelte
+    │   │   ├── CultureBadge.svelte
+    │   │   ├── PrestigeBadge.svelte
+    │   │   ├── WalletConnect.svelte
+    │   │   ├── IngredientPicker.svelte ← desplegable controlado (anti-solapamiento)
+    │   │   ├── FlagModal.svelte
+    │   │   └── OverlapWarning.svelte  ← aviso de ingredientes duplicados
+    │   │
+    │   ├── stores/
+    │   │   └── session.ts             ← usuario actual (address, username, prestige)
+    │   │
+    │   └── utils/
+    │       └── hash.ts                ← content_hash + ingredients_fingerprint
+    │
+    └── routes/
+        ├── +layout.svelte             ← shell raíz (fuentes, meta globales)
+        ├── +layout.server.ts          ← detecta locale de URL, verifica sesión Sygnet
+        │
+        ├── [lang]/                    ← /es/... o /en/...
+        │   ├── +layout.svelte         ← nav + footer (i18n)
+        │   ├── +layout.server.ts      ← inyecta locale a Paraglide
+        │   ├── +page.svelte           ← home / landing
+        │   │
+        │   ├── recipes/
+        │   │   ├── +page.svelte       ← listado con filtros (cultura, ingredientes)
+        │   │   ├── +page.server.ts
+        │   │   ├── new/
+        │   │   │   ├── +page.svelte   ← formulario publicación
+        │   │   │   └── +page.server.ts ← calcula hashes, detecta solapamiento, guarda
+        │   │   └── [slug]/
+        │   │       ├── +page.svelte   ← detalle receta
+        │   │       └── +page.server.ts
+        │   │
+        │   ├── cultures/
+        │   │   ├── +page.svelte       ← árbol jerárquico de culturas
+        │   │   └── [slug]/
+        │   │       └── +page.svelte   ← recetas de una cultura
+        │   │
+        │   └── profile/
+        │       └── [address]/
+        │           └── +page.svelte   ← perfil público + prestigio suite
+        │
+        └── api/                       ← endpoints REST internos
+            ├── recipes/
+            │   └── +server.ts         ← GET (listado/búsqueda), POST (crear)
+            ├── recipes/[id]/
+            │   └── +server.ts         ← GET, PATCH, DELETE
+            ├── ratings/
+            │   └── +server.ts         ← POST (votar) — requiere wallet
+            ├── flags/
+            │   └── +server.ts         ← POST (flaggear) — requiere wallet
+            └── session/
+                └── +server.ts         ← GET (verificar sesión con Sygnet)
+```
+
+---
+
+### Reglas de la estructura
+
+**`src/lib/server/`** — todo lo que toque DB o llame a Sygnet con la suite key vive aquí.
+SvelteKit impide que este código llegue al cliente en tiempo de build.
+
+**`messages/*.json`** — el único lugar donde existe texto visible al usuario. Nunca en componentes.
+
+**`src/paraglide/`** — auto-generado por `paraglide-js compile`. En `.gitignore`.
+Se regenera en cada build y en dev con `--watch`.
+
+**`routes/api/`** — separado de las rutas de página. Los endpoints no renderizan HTML.
+
+**`routes/[lang]/`** — toda ruta de usuario lleva prefijo de idioma.
+`/es/recipes/arroz-con-leche` y `/en/recipes/arroz-con-leche` son la misma receta,
+distinto idioma de interfaz.
+
+---
+
+### Estructura de `messages/es.json` (base inicial)
+
+```json
+{
+  "nav_home": "Inicio",
+  "nav_recipes": "Recetas",
+  "nav_cultures": "Culturas",
+  "nav_publish": "Publicar receta",
+  "nav_profile": "Mi perfil",
+
+  "home_hero_title": "Preserva la gastronomía de tu cultura",
+  "home_hero_subtitle": "Publica, descubre y certifica recetas antes de que se pierdan",
+  "home_cta_browse": "Explorar recetas",
+  "home_cta_publish": "Publicar receta",
+
+  "recipe_by": "Por {author}",
+  "recipe_culture": "Cultura",
+  "recipe_ingredients": "Ingredientes",
+  "recipe_instructions": "Elaboración",
+  "recipe_overlap_warning": "Hay {count} recetas con exactamente estos ingredientes",
+  "recipe_certified": "Receta certificada en Sygnet",
+
+  "profile_prestige": "Prestigio",
+  "profile_recipes_published": "Recetas publicadas",
+  "profile_member_since": "Miembro desde {date}",
+
+  "error_not_found": "Esta página no existe",
+  "error_server": "Error del servidor. Inténtalo de nuevo.",
+
+  "wallet_connect": "Conectar wallet",
+  "wallet_connected": "Conectado como {address}",
+  "wallet_disconnect": "Desconectar"
+}
+```
+
+`en.json` replica exactamente las mismas claves en inglés.
+
+---
+
+## 15. Seguridad — Diseño previo al desarrollo
+
+Lección de Sygnet: la seguridad retrofitada cuesta 6 rondas de auditoría. Aquí se define antes
+de escribir la primera línea de código.
+
+---
+
+### Modelo de amenazas — superficies de ataque
+
+```
+Internet
+   │
+   ├── Usuario anónimo      → puede publicar contenido, no tiene cuenta
+   ├── Usuario registrado   → email o wallet, puede votar y flaggear
+   ├── Usuario malicioso    → spam, plagio, contenido dañino, farming de prestigio
+   │
+   ├── culinaryhub.sygnet.app  (SvelteKit SSR)
+   │       ├── Rutas de página     → XSS, CSRF, inyección de contenido
+   │       ├── API routes          → IDOR, rate limiting, autenticación
+   │       └── Client-side         → wallet signing, cookie lectura
+   │
+   ├── PostgreSQL              → SQL injection, exposición de datos
+   ├── Sygnet API              → X-Suite-Key leakage, MITM entre servicios
+   └── Variables de entorno    → exposición de secrets
+```
+
+---
+
+### Capa 1 — HTTP y headers
+
+Obligatorios en todas las respuestas:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+**CORS:** solo `culinaryhub.sygnet.app` y `sygnet.app` en lista blanca. Nunca `*`.
+
+Configurados en SvelteKit como hook global en `src/hooks.server.ts`, no en cada endpoint.
+
+---
+
+### Capa 2 — Autenticación y sesión
+
+| Vector | Mitigación |
+|---|---|
+| Robo de cookie por XSS | `HttpOnly; Secure; SameSite=Lax` — JS nunca lee la cookie |
+| Subdomain takeover | Auditoría periódica de subdominios activos en `sygnet.app` |
+| Sesión falsa | Toda sesión se verifica contra Sygnet `/api/suite/session/verify` |
+| Wallet impersonation | La firma se verifica con `ethers.verifyMessage` server-side |
+| Fuerza bruta | Rate limiting en endpoints de auth (ver Capa 4) |
+
+**Regla:** ningún endpoint confía en datos del cliente para determinar identidad.
+El `user_id` siempre viene de la sesión verificada, nunca de un parámetro del request.
+
+---
+
+### Capa 3 — Base de datos
+
+**SQL injection:** cero queries con concatenación de strings. Solo queries parametrizadas.
+
+```typescript
+// ❌ Prohibido
+db.query(`SELECT * FROM recipes WHERE slug = '${slug}'`)
+
+// ✅ Correcto
+db.query('SELECT * FROM recipes WHERE slug = $1', [slug])
+```
+
+**Exposición de datos:**
+- `users.ethereum_address` es pública (es la identidad). El resto del perfil es opt-in.
+- La DB nunca es accesible desde fuera de la red privada. Solo SvelteKit conecta a PostgreSQL.
+- `DATABASE_URL` solo en variables de entorno del servidor, nunca en cliente.
+
+**IDOR (acceso a recursos ajenos):**
+- `PATCH /api/recipes/[id]` verifica que `recipe.author_id = session.user_id` antes de ejecutar.
+- Los endpoints de moderación verifican que el usuario tiene wallet antes de aceptar flags/ratings.
+
+---
+
+### Capa 4 — Rate limiting
+
+Implementado en `src/hooks.server.ts` con un store en memoria (o Redis si escala):
+
+| Endpoint | Límite | Ventana |
+|---|---|---|
+| `POST /api/recipes` | 5 publicaciones | 24h por IP |
+| `POST /api/ratings` | 20 votos | 1h por user |
+| `POST /api/flags` | 10 flags | 1h por user |
+| `GET /api/suite/*` (Sygnet) | 100 llamadas | 1h por nodo |
+| Cualquier endpoint | 200 requests | 1min por IP |
+
+Respuesta en exceso: `429 Too Many Requests`.
+
+---
+
+### Capa 5 — Contenido de usuario (XSS)
+
+Todo contenido publicado por usuarios (título, descripción, instrucciones, notas) se escapa
+en renderizado. SvelteKit escapa por defecto en templates `{variable}`.
+
+**Regla:** nunca usar `{@html variable}` con contenido de usuario. Solo con strings
+generados internamente (markdown renderizado server-side con sanitización previa).
+
+Si en el futuro se añade soporte Markdown en instrucciones:
+- Sanitizar con `DOMPurify` o equivalente server-side antes de guardar.
+- Whitelist de tags permitidos: `<strong>`, `<em>`, `<ol>`, `<ul>`, `<li>`. Nada más.
+
+---
+
+### Capa 6 — Manipulación del sistema de prestigio
+
+Vectores específicos de la meritocracia:
+
+| Ataque | Mitigación |
+|---|---|
+| Sybil (cuentas falsas votándose entre sí) | Wallet requerida para votar. Una wallet = una cuenta. |
+| Vote stuffing | `UNIQUE (recipe_id, user_id)` en `ratings` — un voto por receta por usuario |
+| Flag bombing (coordinar flags para ocultar contenido válido) | Umbral ponderado por prestigio — cuentas nuevas tienen peso 1, no pueden ocultar solas |
+| Prestigio inflado | `prestige_events` es append-only y auditable. Cada evento tiene fuente verificable. |
+| Import falso desde Sygnet | La sincronización de `sygnet_prestige_cache` usa `X-Suite-Key` y verifica firma del response |
+
+---
+
+### Capa 7 — Secrets e infraestructura
+
+**Variables de entorno — reglas:**
+- `DATABASE_URL`, `SYGNET_SUITE_KEY` solo en entorno servidor. Nunca en `PUBLIC_*`.
+- `.env` en `.gitignore`. `.env.example` con claves vacías en el repo.
+- Rotación de `SYGNET_SUITE_KEY` si hay sospecha de exposición.
+
+**Dependencias:**
+- `npm audit` en cada PR como paso de CI.
+- Dependencias mínimas — cada librería añadida es superficie de ataque.
+- Sin dependencias con acceso a filesystem innecesario.
+
+**X-Suite-Key entre servicios:**
+- Viaja solo en headers server-to-server, nunca en URLs.
+- Sygnet valida que el header existe y es correcto antes de responder.
+- TLS obligatorio entre servicios (HTTPS siempre, nunca HTTP interno).
+
+---
+
+### Capa 8 — Política zero-trust de datos (lección de Sygnet)
+
+**No almacenamos:**
+- Email de usuarios
+- IPs (solo en memoria con TTL 1h para rate limiting)
+- Historial de navegación ni analytics personales
+- Imágenes (v1: solo URL externa si el usuario la provee)
+- Sesiones server-side (stateless vía cookie Sygnet)
+
+**Límites de publicación por tipo de usuario:**
+- Sin wallet: no puede publicar
+- Con wallet (tier 1, 7-30 días): 1 receta/día
+- Con wallet (tier 2, >30 días): 3 recetas/día
+- Con wallet + prestigio >500: 10 recetas/día
+
+**Límites de tamaño por receta:** ~10 KB máximo (título + descripción + instrucciones).
+Sin binarios. Sin imágenes almacenadas.
+
+**Proyección de almacenamiento:**
+- 100K recetas → ~570 MB — trivial en NAS
+- 500K recetas → ~2,8 GB — manejable sin cambios de infra
+- Imágenes externas: Culinary Hub almacena solo la URL, nunca el binario.
+
+**GDPR por diseño:** "eliminar cuenta" pone `author_id = NULL` en las recetas
+(el contenido cultural permanece, la autoría se borra). Sin email, sin datos personales
+que notificar a autoridades.
+
+---
+
+### Lo que queda fuera de scope en esta fase
+
+- WAF (Web Application Firewall) — añadir si el tráfico crece.
+- 2FA — la wallet ya es un segundo factor implícito.
+- Auditoría de imágenes subidas — las recetas no tienen imágenes en v1.
+- Penetration testing formal — hacer antes del lanzamiento público.
+
+---
+
+### Checklist pre-lanzamiento
+
+- [ ] CSP headers verificados con [securityheaders.com]
+- [ ] `npm audit` sin vulnerabilidades críticas
+- [ ] Todos los endpoints de escritura con rate limiting activo
+- [ ] Cookie con las cuatro flags verificadas en producción
+- [ ] `.env` no commiteado (verificar git history)
+- [ ] `SYGNET_SUITE_KEY` diferente en dev y producción
+- [ ] Subdominios activos de `sygnet.app` auditados
+- [ ] Penetration testing básico manual
+
+---
+
+## 16. Rol de administrador
+
+El admin es **jardinero, no gobernante**. Su poder es estrecho y toda acción queda en audit log público — la comunidad puede ver qué ocultó el admin y por qué.
+
+### Puede hacer
+
+| Área | Acciones |
+|---|---|
+| Catálogo culturas | CRUD jerárquico (continente → país → región) |
+| Catálogo ingredientes | CRUD + normalización de sinónimos |
+| Moderación emergencia | Ocultar receta (motivo escrito obligatorio, traza pública) |
+| Moderación emergencia | Banear wallet (motivo escrito obligatorio, traza pública) |
+| Sistema | Ver métricas (recetas/día, flags activos, usuarios nuevos) |
+| Sistema | Ajustar umbrales (threshold de flags, límites de publicación por tier) |
+
+### No puede hacer
+
+- Modificar `prestige_events` directamente
+- Leer datos de usuarios más allá del address público
+- Actuar sin dejar traza en el audit log
+- Votar, flaggear o endorsar con peso especial
+
+### Audit log público
+
+Tabla `admin_actions`:
+```sql
+CREATE TABLE admin_actions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id    UUID NOT NULL REFERENCES users(id),
+    action      VARCHAR(100) NOT NULL,   -- 'hide_recipe', 'ban_wallet', etc.
+    target_id   UUID,
+    reason      TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+Visible públicamente en `/[lang]/admin/log`. Sin paginación oculta, sin filtros que esconden acciones.
+
+### Diferencia con Sygnet
+
+El admin de Sygnet gestiona certificaciones con implicaciones legales — poder más amplio justificado. Aquí el contenido es cultural, la comunidad absorbe el 80% de la moderación. El panel de Culinary Hub es deliberadamente más estrecho.
+
+---
+
+## 17. Protección contra bots
+
+### Amenazas específicas de esta plataforma
+
+| Amenaza | Impacto |
+|---|---|
+| Bots de contenido | Inundan la BD con recetas AI-generated falsas o genéricas |
+| Bots Sybil | Crean cientos de wallets para inflar prestigio propio |
+| Bots de votos | Ratings falsos en recetas específicas |
+| Bots de flags | Coordinan para ocultar contenido legítimo |
+| Scrapers | Cosechan el catálogo cultural completo |
+
+### Defensa 1 — La especialización como filtro natural
+
+El contenido es culturalmente específico. Una "paella valenciana" con pollo y chorizo es detectablemente incorrecta para cualquier valenciano de la comunidad. **Los bots generan contenido plausible, no auténtico.** La comunidad es el detector de calidad más efectivo — el sistema técnico solo necesita impedir ataques a escala.
+
+### Defensa 2 — Honeypot (coste cero, efectividad alta)
+
+Campo invisible en todos los formularios de publicación. Los bots lo rellenan, los humanos no lo ven. Si llega relleno, la petición se descarta silenciosamente.
+
+```html
+<!-- Campo invisible para bots — nunca mostrar al usuario -->
+<input name="website" style="display:none" tabindex="-1" autocomplete="off" />
+```
+
+```typescript
+// En el server action de publicación
+if (formData.get('website')) return; // bot detectado, descarte silencioso
+```
+
+### Defensa 3 — Cloudflare Turnstile (CAPTCHA sin fricción)
+
+Para publicación anónima: verificación Turnstile invisible. Los usuarios normales no ven nada; los bots fallan. Gratuito, sin cookies, sin tracking — compatible con la política zero-trust.
+
+Solo se activa en:
+- `POST /api/recipes` sin sesión de wallet
+- Registro de nuevo usuario
+
+### Defensa 4 — Edad de wallet como señal de confianza
+
+No bloquea, gradúa el peso. Una wallet creada hoy con cero transacciones on-chain es sospechosa. Se consulta via Etherscan API (gratuita) en el momento de conectar.
+
+```
+Wallet < 7 días o 0 transacciones  → puede publicar, NO puede votar ni flaggear
+Wallet 7-30 días                    → puede votar (peso 1)
+Wallet > 30 días                    → peso normal por prestige_score
+```
+
+Sin almacenar datos de la wallet más allá del address. La consulta es stateless.
+
+```sql
+-- Campo en users para cachear el tier de wallet
+ALTER TABLE users ADD COLUMN wallet_tier SMALLINT NOT NULL DEFAULT 0;
+-- 0=nueva/sin verificar, 1=joven, 2=establecida
+```
+
+### Defensa 5 — Rate limiting asimétrico
+
+Los límites definidos en seguridad (sección 15) ya defienden de bots por volumen. Añadir penalización progresiva: si una IP supera el límite 3 veces en 24h, el bloqueo sube a 48h.
+
+### Defensa 6 — Detección de patrones Sybil
+
+Job periódico (cron diario) que detecta clusters sospechosos:
+
+```
+Señales de Sybil:
+- Wallet A vota exclusivamente recetas de Wallet B
+- Grupo de wallets creadas el mismo día votándose entre sí
+- Prestige_events todos del mismo source en poco tiempo
+```
+
+Las wallets marcadas bajan a `wallet_tier = 0` hasta revisión manual del admin.
+
+### Defensa 7 — `ai_level` obligatorio + autodeclaración
+
+El campo ya existe en el schema. Se marca como obligatorio en el formulario de publicación. No detecta bots directamente, pero:
+- Crea responsabilidad explícita del autor
+- Contenido marcado como `generated` tiene menor peso en rankings
+- Inconsistencia entre lo declarado y el patrón del contenido → señal para el cron de detección
+
+### Lo que NO haremos
+
+- ❌ Email verification — contradice zero-trust
+- ❌ Biometría o KYC — invasivo e innecesario
+- ❌ CAPTCHA en lectura — la navegación debe ser libre
+- ❌ Bloquear wallets nuevas — solo graduar su peso
+
+### Resumen de capas
+
+```
+Lectura              →  sin cuenta, totalmente libre
+Publicación          →  wallet_tier ≥ 1 obligatorio (≥ 7 días antigüedad)
+Votos y flags        →  wallet_tier ≥ 1 obligatorio
+Sybil                →  cron de detección de clusters
+Contenido falso      →  comunidad + ai_level obligatorio
+```
+
+---
+
+## 18. Decisiones cerradas — revisión pre-scaffold
+
+### Licencia de contenido: CC BY-SA
+
+Todo contenido publicado en Culinary Hub queda bajo licencia **Creative Commons Attribution-ShareAlike 4.0**.
+El autor conserva la autoría, cede uso libre con atribución. Alineado con la misión de preservación cultural.
+Visible en footer y en el formulario de publicación (checkbox de aceptación obligatorio).
+Afecta los términos de uso — redactar antes del lanzamiento público.
+
+---
+
+### Sistema de notificaciones in-app
+
+Sin email (zero-trust). Las notificaciones son in-app, estilo centro de mensajes como Sygnet.
+El usuario las consulta desde su perfil — sin push externo en v1.
+
+```sql
+CREATE TYPE notification_type AS ENUM (
+    'endorsement_received',
+    'recipe_certified',
+    'flag_confirmed',
+    'flag_dismissed',
+    'recipe_hidden_admin',
+    'prestige_milestone'
+);
+
+CREATE TABLE notifications (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type            notification_type NOT NULL,
+    reference_id    UUID,                   -- receta, endorsement, flag, etc.
+    read            BOOLEAN NOT NULL DEFAULT false,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id) WHERE read = false;
+```
+
+El badge de notificaciones en el nav muestra `COUNT(*) WHERE user_id = ? AND read = false`.
+Marcar como leídas al abrir el panel — sin petición adicional.
+
+---
+
+### SEO — must have
+
+SvelteKit SSR genera HTML completo por defecto — base cubierta. Añadir obligatoriamente:
+
+- `<title>` y `<meta description>` dinámicos por receta (desde `+page.server.ts`)
+- `<link rel="canonical">` con URL del idioma activo
+- Open Graph tags (`og:title`, `og:description`, `og:type=article`)
+- `sitemap.xml` generado automáticamente desde la lista de recetas publicadas
+- `robots.txt` permisivo para indexación de recetas
+
+Las claves de meta tags van en `messages/es.json` y `messages/en.json` como el resto.
+
+---
+
+### PWA — must have en scaffold
+
+Añadir `vite-plugin-pwa` en el scaffold inicial. Caso de uso principal: consultar receta
+en la cocina sin conexión.
+
+Configuración mínima:
+- Cache de páginas de recetas visitadas (stale-while-revalidate)
+- `manifest.json` con nombre, iconos y color de tema
+- Prompt de instalación en móvil
+
+Sin service worker complejo en v1 — solo cache de lectura.
+
+---
+
+### Búsqueda full-text: PostgreSQL tsvector
+
+Minimalista por diseño. Si la plataforma crece hasta necesitar Meilisearch o Algolia,
+será un problema bienvenido. Por ahora:
+
+- `search_vector tsvector` en `recipes`, mantenido por trigger automático
+- Índice GIN para búsqueda eficiente
+- Soporte multiidioma: `to_tsvector('spanish', ...)` y `to_tsvector('english', ...)`
+  según el idioma de la receta
+- Query: `search_vector @@ plainto_tsquery('spanish', $1)`
+
+Cubre búsqueda por título y descripción. Los ingredientes se filtran por la tabla
+`recipe_ingredients` + `ingredients` — facetas, no full-text.
+
+---
+
+### Versioning de recetas
+
+- `recipes.version` lleva el número de versión actual.
+- `recipe_versions` almacena el historial completo.
+- La firma Ethereum y `sygnet_cert_id` son por versión — una versión certificada es inmutable.
+- Editar una receta certificada crea `version + 1` sin certificación (el autor puede
+  re-certificar la nueva versión si lo desea).
+- La UI muestra el historial de versiones en la página de detalle de la receta.
+
+---
+
+### Cold start
+
+Problema conocido, deferido intencionadamente. A resolver antes del lanzamiento alpha
+con estrategia de seed content (recetas de dominio público con atribución, colaboradores
+cercanos, importación curada). Tarea para el Claude del futuro.
+
+---
+
+_Documento vivo. Actualizar con cada decisión relevante._
