@@ -1,0 +1,102 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE: ghcr.io/fralopgom/culinaryhub
+  CONTAINER: culinaryhub
+  NAS_DIR: /share/CACHEDEV1_DATA/culinaryhub
+  HOST_PORT: 3001
+  CTR_PORT: 3000
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Docker image ──────────────────────────────────────────────────────
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+      # ── SSH ControlMaster (QNAP has low MaxStartups) ──────────────────────
+      - name: Open SSH tunnel
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "${{ secrets.NAS_SSH_KEY }}" > ~/.ssh/nas_key
+          chmod 600 ~/.ssh/nas_key
+          ssh -o StrictHostKeyChecking=no \
+              -o ControlMaster=yes \
+              -o ControlPath=/tmp/ssh-cm-%r@%h:%p \
+              -o ControlPersist=10m \
+              -i ~/.ssh/nas_key \
+              -N -f \
+              ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }}
+
+      - name: Write env file on NAS
+        run: |
+          ssh -o ControlPath=/tmp/ssh-cm-%r@%h:%p \
+              ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} \
+              "mkdir -p ${{ env.NAS_DIR }}"
+          ssh -o ControlPath=/tmp/ssh-cm-%r@%h:%p \
+              ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} \
+              "cat > ${{ env.NAS_DIR }}/app.env" <<'ENVEOF'
+          DATABASE_URL=${{ secrets.CULINARYHUB_DATABASE_URL }}
+          SYGNET_API_URL=${{ secrets.CULINARYHUB_SYGNET_API_URL }}
+          SYGNET_SUITE_KEY=${{ secrets.CULINARYHUB_SYGNET_SUITE_KEY }}
+          SESSION_SECRET=${{ secrets.CULINARYHUB_SESSION_SECRET }}
+          ADMIN_ADDRESSES=${{ secrets.CULINARYHUB_ADMIN_ADDRESSES }}
+          MIN_WALLET_TIER=${{ secrets.CULINARYHUB_MIN_WALLET_TIER }}
+          DAILY_LIMIT_TIER1=${{ secrets.CULINARYHUB_DAILY_LIMIT_TIER1 }}
+          DAILY_LIMIT_TIER2=${{ secrets.CULINARYHUB_DAILY_LIMIT_TIER2 }}
+          DAILY_LIMIT_HIGH=${{ secrets.CULINARYHUB_DAILY_LIMIT_HIGH }}
+          FLAG_HIDE_THRESHOLD=${{ secrets.CULINARYHUB_FLAG_HIDE_THRESHOLD }}
+          ENVEOF
+
+      - name: Deploy container on NAS
+        run: |
+          ssh -o ControlPath=/tmp/ssh-cm-%r@%h:%p \
+              ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} \
+              "docker pull ${{ env.IMAGE }}:latest && \
+               docker stop ${{ env.CONTAINER }} 2>/dev/null || true && \
+               docker rm   ${{ env.CONTAINER }} 2>/dev/null || true && \
+               docker run -d \
+                 --name ${{ env.CONTAINER }} \
+                 --restart unless-stopped \
+                 --env-file ${{ env.NAS_DIR }}/app.env \
+                 -p ${{ env.HOST_PORT }}:${{ env.CTR_PORT }} \
+                 ${{ env.IMAGE }}:latest"
+
+      - name: Health check
+        run: |
+          sleep 5
+          ssh -o ControlPath=/tmp/ssh-cm-%r@%h:%p \
+              ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} \
+              "curl -sf http://localhost:${{ env.HOST_PORT }} || \
+               (docker logs ${{ env.CONTAINER }} --tail 30 && exit 1)"
+
+      - name: Close SSH tunnel
+        if: always()
+        run: |
+          ssh -O exit \
+              -o ControlPath=/tmp/ssh-cm-%r@%h:%p \
+              ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} || true
