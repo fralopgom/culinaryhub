@@ -6,8 +6,8 @@
 ────────────────────────────────────────────────────────────────
 
   CI          ✓  typecheck + build verde en GitHub Actions
-  CD          ✓  deploy self-hosted (runner qnap-nas, ARM64) operativo
-  App         ✓  http://192.168.178.30:3001 responde 200
+  CD          ✗  health check falla — app arranca pero el check expira (ver T-CD)
+  App         ✓  http://192.168.178.30:3001 responde 200 (verificado manualmente)
   Schema DB   ✓  migraciones 001-003 aplicadas en culinaryhub (PostgreSQL NAS)
   Auth código ✓  wallet + OAuth implementados
   URL pública ✗  no existe — OAuth roto, app solo accesible en LAN
@@ -61,6 +61,15 @@
        Valor actual: http://192.168.178.87:8001  (solo funciona en LAN)
        Valor correcto: https://mycert.myqnapcloud.com:8443
        Cambiar en GitHub Secret CULINARYHUB_SYGNET_API_URL y hacer push.
+
+  T-CD [BLOQUEANTE] CD health check falla consistentemente
+       La app responde 200 cuando se comprueba manualmente, pero el step
+       "Health check" del deploy job falla. Retry loop de 18×5s=90s añadido
+       pero no ha resuelto el problema. Posibles causas sin confirmar:
+         a) curl no encuentra localhost:3001 desde dentro del runner container
+         b) el contenedor anterior en estado Restarting interfiere con el nuevo
+         c) el runner no tiene acceso a la red del host (--network host faltante)
+       Pendiente de investigar con logs detallados del step fallido.
 
   T-7  [MENOR] 4 Svelte 5 runes warnings en layout files
        No rompen build (--threshold error los filtra) pero son deuda.
