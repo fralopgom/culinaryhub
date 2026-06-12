@@ -2,6 +2,12 @@ import { env } from '$env/dynamic/private';
 import { randomBytes } from 'crypto';
 import db from './db';
 
+// Captured with ! — required at runtime, absent only if misconfigured
+const GOOGLE_ID     = () => env.GOOGLE_CLIENT_ID!;
+const GOOGLE_SECRET = () => env.GOOGLE_CLIENT_SECRET!;
+const GITHUB_ID     = () => env.GITHUB_CLIENT_ID!;
+const GITHUB_SECRET = () => env.GITHUB_CLIENT_SECRET!;
+
 export async function createSession(userId: string): Promise<string> {
 	const id = randomBytes(32).toString('hex');
 	await db`INSERT INTO sessions (id, user_id) VALUES (${id}, ${userId})`;
@@ -32,7 +38,7 @@ export function computeAccountTier(createdAt: Date): number {
 
 export function googleAuthUrl(redirectUri: string, state: string): string {
 	return 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
-		client_id: env.GOOGLE_CLIENT_ID,
+		client_id: GOOGLE_ID(),
 		redirect_uri: redirectUri,
 		response_type: 'code',
 		scope: 'openid email profile',
@@ -43,7 +49,7 @@ export function googleAuthUrl(redirectUri: string, state: string): string {
 
 export function githubAuthUrl(redirectUri: string, state: string): string {
 	return 'https://github.com/login/oauth/authorize?' + new URLSearchParams({
-		client_id: env.GITHUB_CLIENT_ID,
+		client_id: GITHUB_ID(),
 		redirect_uri: redirectUri,
 		scope: 'read:user user:email',
 		state
@@ -56,7 +62,7 @@ export async function exchangeGoogleCode(code: string, redirectUri: string) {
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 		body: new URLSearchParams({ code, redirect_uri: redirectUri,
 			grant_type: 'authorization_code',
-			client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET })
+			client_id: GOOGLE_ID(), client_secret: GOOGLE_SECRET() })
 	}).then(r => r.json());
 	if (!tokens.access_token) throw new Error('google_token_failed');
 
@@ -70,7 +76,7 @@ export async function exchangeGithubCode(code: string, redirectUri: string) {
 		method: 'POST',
 		headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
 		body: new URLSearchParams({ code, redirect_uri: redirectUri,
-			client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET })
+			client_id: GITHUB_ID(), client_secret: GITHUB_SECRET() })
 	}).then(r => r.json());
 	if (!tokens.access_token) throw new Error('github_token_failed');
 

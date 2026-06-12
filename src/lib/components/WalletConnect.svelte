@@ -2,6 +2,7 @@
 	import { t } from 'svelte-i18n';
 	import { session } from '$lib/stores/session';
 
+
 	let connecting = $state(false);
 	let error      = $state('');
 

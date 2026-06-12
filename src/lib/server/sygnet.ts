@@ -3,9 +3,9 @@ import { env } from '$env/dynamic/private';
 const SYGNET_API_URL = env.SYGNET_API_URL;
 const SYGNET_SUITE_KEY = env.SYGNET_SUITE_KEY;
 
-const headers = {
+const headers: Record<string, string> = {
 	'Content-Type': 'application/json',
-	'X-Suite-Key': SYGNET_SUITE_KEY
+	'X-Suite-Key': SYGNET_SUITE_KEY ?? ''
 };
 
 export async function verifySession(token: string) {

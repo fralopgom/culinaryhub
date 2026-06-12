@@ -19,5 +19,5 @@ export const load: PageServerLoad = async ({ params }) => {
 		ORDER BY r.created_at DESC
 		LIMIT 12
 	`;
-	return { recipes };
+	return { recipes: recipes as any[] };
 };

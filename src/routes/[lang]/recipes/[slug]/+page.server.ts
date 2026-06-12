@@ -7,7 +7,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const ingNameCol = params.lang === 'en' ? 'name_en' : 'name_es';
 
 	const [recipe] = await db`
-		SELECT r.*, u.username AS author_username, u.ethereum_address AS author_address,
+		SELECT r.*, u.username AS author_username, u.address AS author_address,
 		       u.prestige_score AS author_prestige,
 		       c.${db(nameCol)} AS culture_name, c.slug AS culture_slug,
 		       COALESCE(AVG(rt.score), 0)::numeric(3,1) AS avg_score,
@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		LEFT JOIN cultures c ON r.culture_id = c.id
 		LEFT JOIN ratings rt ON rt.recipe_id = r.id
 		WHERE r.slug = ${params.slug} AND r.status != 'hidden'
-		GROUP BY r.id, u.username, u.ethereum_address, u.prestige_score, c.${db(nameCol)}, c.slug
+		GROUP BY r.id, u.username, u.address, u.prestige_score, c.${db(nameCol)}, c.slug
 	`;
 	if (!recipe) error(404);
 
@@ -37,7 +37,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		recipe,
 		ingredients,
-		tags: tags.map((t: { tag: string }) => t.tag),
+		tags: (tags as any[]).map((t) => t.tag as string),
 		versions
 	};
 };

@@ -11,5 +11,5 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		db`SELECT id, slug, ${db(nameCol)} AS name, category FROM ingredients ORDER BY name`
 	]);
 
-	return { cultures, ingredients };
+	return { cultures: cultures as any[], ingredients: ingredients as any[] };
 };

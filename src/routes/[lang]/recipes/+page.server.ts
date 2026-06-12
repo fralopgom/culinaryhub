@@ -34,5 +34,5 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		db`SELECT id, slug, ${db(nameCol)} AS name FROM cultures WHERE level = 1 ORDER BY name`
 	]);
 
-	return { recipes, cultures, page, search, culture_id, tag };
+	return { recipes: recipes as any[], cultures: cultures as any[], page, search, culture_id, tag };
 };

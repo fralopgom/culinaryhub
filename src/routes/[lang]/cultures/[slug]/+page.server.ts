@@ -27,5 +27,5 @@ export const load: PageServerLoad = async ({ params }) => {
 		ORDER BY r.created_at DESC
 	`;
 
-	return { culture, recipes };
+	return { culture, recipes: recipes as any[] };
 };

@@ -11,5 +11,5 @@ export const load: PageServerLoad = async ({ params }) => {
 		GROUP BY c.id
 		ORDER BY c.level, name
 	`;
-	return { cultures };
+	return { cultures: cultures as any[] };
 };

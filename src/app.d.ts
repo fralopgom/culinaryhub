@@ -1,5 +1,9 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 declare global {
+	interface Window {
+		ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<string[]> };
+	}
+
 	namespace App {
 		interface Locals {
 			user: {

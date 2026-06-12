@@ -50,7 +50,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	if (!walletCanPublish(user.wallet_tier)) error(403, 'wallet_tier_insufficient');
 
-	if (await dailyLimitReached(user.address, user.wallet_tier, user.prestige_score)) {
+	if (await dailyLimitReached(user.id, user.wallet_tier, user.prestige_score)) {
 		error(429, 'daily_limit_reached');
 	}
 

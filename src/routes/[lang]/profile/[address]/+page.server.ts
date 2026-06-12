@@ -5,9 +5,12 @@ import db from '$lib/server/db';
 export const load: PageServerLoad = async ({ params }) => {
 	const nameCol = params.lang === 'en' ? 'name_en' : 'name_es';
 
+	// handle is either an Ethereum address or a username (for OAuth users)
 	const [user] = await db`
-		SELECT id, username, ethereum_address, prestige_score, wallet_tier, created_at
-		FROM users WHERE ethereum_address = ${params.address}
+		SELECT id, username, address, prestige_score, wallet_tier, created_at
+		FROM users
+		WHERE address = ${params.address} OR username = ${params.address}
+		LIMIT 1
 	`;
 	if (!user) error(404);
 
@@ -27,12 +30,14 @@ export const load: PageServerLoad = async ({ params }) => {
 			GROUP BY r.id, u.username, u.prestige_score, c.${db(nameCol)}, c.slug
 			ORDER BY r.created_at DESC
 		`,
-		db`SELECT prestige_score FROM sygnet_prestige_cache WHERE ethereum_address = ${user.ethereum_address}`
+		user.address
+			? db`SELECT prestige_score FROM sygnet_prestige_cache WHERE ethereum_address = ${user.address}`
+			: Promise.resolve([])
 	]);
 
 	return {
 		profile: user,
-		recipes,
+		recipes: recipes as any[],
 		sygnet_prestige: sygnet[0]?.prestige_score ?? null
 	};
 };
