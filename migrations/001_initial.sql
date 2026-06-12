@@ -32,7 +32,7 @@ CREATE TYPE notification_type AS ENUM (
 
 CREATE TABLE users (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ethereum_address    VARCHAR(42)  UNIQUE,        -- nullable: wallet opcional
+    address             VARCHAR(42)  UNIQUE,        -- nullable: wallet opcional
     username            VARCHAR(50)  UNIQUE NOT NULL,
     locale              VARCHAR(5)   NOT NULL DEFAULT 'es',
     prestige_score      INTEGER      NOT NULL DEFAULT 0,
