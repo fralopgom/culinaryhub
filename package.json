@@ -22,6 +22,7 @@
 		"vite-plugin-pwa": "^1.3.0"
 	},
 	"dependencies": {
+		"ethers": "^6.16.0",
 		"postgres": "^3.4.9",
 		"svelte-i18n": "^4.0.1"
 	}

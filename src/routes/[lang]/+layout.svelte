@@ -1,24 +1,33 @@
 <script lang="ts">
 	import { t, locale } from 'svelte-i18n';
+	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import NotificationBell from '$lib/components/NotificationBell.svelte';
 
 	let { children, data } = $props();
-
 	locale.set(data.lang);
+
+	const altLang = $derived(data.lang === 'es' ? 'en' : 'es');
 </script>
 
 <svelte:head>
 	<html lang={data.lang} />
+	<link rel="alternate" hreflang={altLang} href="/{altLang}" />
 </svelte:head>
 
-<nav>
-	<a href="/{data.lang}">{$t('nav_home')}</a>
-	<a href="/{data.lang}/recipes">{$t('nav_recipes')}</a>
-	<a href="/{data.lang}/cultures">{$t('nav_cultures')}</a>
-	{#if data.user}
-		<a href="/{data.lang}/profile/{data.user.address}">{$t('nav_profile')}</a>
-		<a href="/{data.lang}/recipes/new">{$t('nav_publish')}</a>
-	{/if}
-</nav>
+<header>
+	<nav>
+		<a href="/{data.lang}">{$t('nav_home')}</a>
+		<a href="/{data.lang}/recipes">{$t('nav_recipes')}</a>
+		<a href="/{data.lang}/cultures">{$t('nav_cultures')}</a>
+		{#if data.user}
+			<a href="/{data.lang}/recipes/new">{$t('nav_publish')}</a>
+			<a href="/{data.lang}/profile/{data.user.address}">{$t('nav_profile')}</a>
+			<NotificationBell count={data.unread_notifications ?? 0} lang={data.lang} />
+		{/if}
+		<a href="/{altLang}">{altLang.toUpperCase()}</a>
+		<WalletConnect />
+	</nav>
+</header>
 
 <main>
 	{@render children()}

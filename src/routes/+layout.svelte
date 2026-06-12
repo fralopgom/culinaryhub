@@ -1,11 +1,11 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
-	import { locale, waitLocale } from 'svelte-i18n';
-	import { browser } from '$app/environment';
+	import { locale } from 'svelte-i18n';
+	import '$lib/i18n';
 
 	let { children, data } = $props();
 
-	if (browser) locale.set(data.lang ?? 'es');
+	locale.set(data.lang ?? 'es');
 </script>
 
 <svelte:head>

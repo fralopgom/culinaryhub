@@ -1,11 +1,21 @@
 import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import db from '$lib/server/db';
 
-const SUPPORTED_LANGS = ['es', 'en'];
+const SUPPORTED = ['es', 'en'];
 
 export const load: LayoutServerLoad = async ({ params, locals }) => {
-	if (!SUPPORTED_LANGS.includes(params.lang)) {
-		error(404);
+	if (!SUPPORTED.includes(params.lang)) error(404);
+
+	let unread_notifications = 0;
+	if (locals.user) {
+		const [row] = await db`
+			SELECT COUNT(*)::int AS count FROM notifications
+			JOIN users ON users.id = notifications.user_id
+			WHERE users.ethereum_address = ${locals.user.address} AND read = false
+		`;
+		unread_notifications = row?.count ?? 0;
 	}
-	return { lang: params.lang, user: locals.user };
+
+	return { lang: params.lang, user: locals.user, unread_notifications };
 };

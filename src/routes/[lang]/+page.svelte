@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from 'svelte-i18n';
+	import RecipeCard from '$lib/components/RecipeCard.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -8,11 +9,9 @@
 <svelte:head>
 	<title>{$t('meta_home_title')}</title>
 	<meta name="description" content={$t('meta_home_description')} />
-	<meta property="og:title" content={$t('meta_home_title')} />
+	<meta property="og:title"       content={$t('meta_home_title')} />
 	<meta property="og:description" content={$t('meta_home_description')} />
-	<meta property="og:type" content="website" />
-	<link rel="alternate" hreflang="es" href="/es" />
-	<link rel="alternate" hreflang="en" href="/en" />
+	<meta property="og:type"        content="website" />
 </svelte:head>
 
 <section>
@@ -23,3 +22,11 @@
 		<a href="/{data.lang}/recipes/new">{$t('home_cta_publish')}</a>
 	{/if}
 </section>
+
+{#if data.recipes.length}
+	<section>
+		{#each data.recipes as recipe}
+			<RecipeCard {recipe} lang={data.lang} />
+		{/each}
+	</section>
+{/if}

@@ -1,0 +1,38 @@
+import { error } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+import db from '$lib/server/db';
+
+export const load: PageServerLoad = async ({ params }) => {
+	const nameCol = params.lang === 'en' ? 'name_en' : 'name_es';
+
+	const [user] = await db`
+		SELECT id, username, ethereum_address, prestige_score, wallet_tier, created_at
+		FROM users WHERE ethereum_address = ${params.address}
+	`;
+	if (!user) error(404);
+
+	const [recipes, sygnet] = await Promise.all([
+		db`
+			SELECT r.id, r.slug, r.title, r.description, r.difficulty, r.ai_level,
+			       r.prep_time_min, r.cook_time_min,
+			       u.username AS author_username, u.prestige_score AS author_prestige,
+			       c.${db(nameCol)} AS culture_name, c.slug AS culture_slug,
+			       COALESCE(AVG(rt.score), 0)::numeric(3,1) AS avg_score,
+			       COUNT(DISTINCT rt.id)::int AS rating_count
+			FROM recipes r
+			JOIN users u ON r.author_id = u.id
+			LEFT JOIN cultures c ON r.culture_id = c.id
+			LEFT JOIN ratings rt ON rt.recipe_id = r.id
+			WHERE r.author_id = ${user.id} AND r.status = 'published'
+			GROUP BY r.id, u.username, u.prestige_score, c.${db(nameCol)}, c.slug
+			ORDER BY r.created_at DESC
+		`,
+		db`SELECT prestige_score FROM sygnet_prestige_cache WHERE ethereum_address = ${user.ethereum_address}`
+	]);
+
+	return {
+		profile: user,
+		recipes,
+		sygnet_prestige: sygnet[0]?.prestige_score ?? null
+	};
+};
