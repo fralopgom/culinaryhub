@@ -4,7 +4,7 @@ import db from '$lib/server/db';
 import { isAdmin } from '$lib/server/admin';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!isAdmin(locals.user?.address)) error(403);
+	if (!isAdmin(locals.user)) error(403);
 
 	const [recipesToday, activeFlags, flaggedRecipes, newUsers] = await Promise.all([
 		db`SELECT COUNT(*)::int AS count FROM recipes WHERE created_at > now() - interval '1 day'`,

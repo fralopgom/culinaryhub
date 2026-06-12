@@ -11,8 +11,7 @@ export const load: LayoutServerLoad = async ({ params, locals }) => {
 	if (locals.user) {
 		const [row] = await db`
 			SELECT COUNT(*)::int AS count FROM notifications
-			JOIN users ON users.id = notifications.user_id
-			WHERE users.ethereum_address = ${locals.user.address} AND read = false
+			WHERE user_id = ${locals.user.id} AND read = false
 		`;
 		unread_notifications = row?.count ?? 0;
 	}

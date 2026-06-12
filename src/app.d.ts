@@ -1,19 +1,17 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
-// for information about these interfaces
 declare global {
 	namespace App {
-		// interface Error {}
 		interface Locals {
 			user: {
-				address: string;
+				id: string;
+				address: string | null;
 				username: string;
 				prestige_score: number;
 				wallet_tier: number;
+				is_admin: boolean;
+				auth_type: 'wallet' | 'google' | 'github';
 			} | null;
 		}
-		// interface PageData {}
-		// interface PageState {}
-		// interface Platform {}
 	}
 }
 

@@ -86,5 +86,12 @@
 
   "footer_license": "Contenido bajo licencia CC BY-SA 4.0",
   "footer_suite": "Parte de la suite Sygnet",
-  "footer_admin_log": "Registro de moderación"
+  "footer_admin_log": "Registro de moderación",
+
+  "auth_login_google": "Continuar con Google",
+  "auth_login_github": "Continuar con GitHub",
+  "auth_or": "o",
+  "auth_logout": "Cerrar sesión",
+  "auth_link_wallet": "Vincular wallet",
+  "auth_wallet_linked": "Wallet vinculada"
 }

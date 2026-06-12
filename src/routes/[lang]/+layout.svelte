@@ -7,6 +7,7 @@
 	locale.set(data.lang);
 
 	const altLang = $derived(data.lang === 'es' ? 'en' : 'es');
+	const profileHandle = $derived(data.user?.address ?? data.user?.username ?? '');
 </script>
 
 <svelte:head>
@@ -21,8 +22,17 @@
 		<a href="/{data.lang}/cultures">{$t('nav_cultures')}</a>
 		{#if data.user}
 			<a href="/{data.lang}/recipes/new">{$t('nav_publish')}</a>
-			<a href="/{data.lang}/profile/{data.user.address}">{$t('nav_profile')}</a>
+			<a href="/{data.lang}/profile/{profileHandle}">{$t('nav_profile')}</a>
 			<NotificationBell count={data.unread_notifications ?? 0} lang={data.lang} />
+			{#if data.user.auth_type !== 'wallet'}
+				<form method="POST" action="/api/auth/logout?lang={data.lang}" style="display:inline">
+					<button type="submit">{$t('auth_logout')}</button>
+				</form>
+			{/if}
+		{:else}
+			<a href="/api/auth/google?lang={data.lang}">{$t('auth_login_google')}</a>
+			<span>{$t('auth_or')}</span>
+			<a href="/api/auth/github?lang={data.lang}">{$t('auth_login_github')}</a>
 		{/if}
 		<a href="/{altLang}">{altLang.toUpperCase()}</a>
 		<WalletConnect />

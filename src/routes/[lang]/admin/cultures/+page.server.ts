@@ -5,14 +5,14 @@ import { isAdmin } from '$lib/server/admin';
 import { slugify } from '$lib/utils/slug';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!isAdmin(locals.user?.address)) error(403);
+	if (!isAdmin(locals.user)) error(403);
 	const cultures = await db`SELECT id, slug, name_es, name_en, parent_id, level FROM cultures ORDER BY level, name_es`;
 	return { cultures };
 };
 
 export const actions: Actions = {
 	add: async ({ request, locals }) => {
-		if (!isAdmin(locals.user?.address)) error(403);
+		if (!isAdmin(locals.user)) error(403);
 		const data      = await request.formData();
 		const name_es   = (data.get('name_es') as string)?.trim();
 		const name_en   = (data.get('name_en') as string)?.trim();
@@ -34,7 +34,7 @@ export const actions: Actions = {
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!isAdmin(locals.user?.address)) error(403);
+		if (!isAdmin(locals.user)) error(403);
 		const data = await request.formData();
 		const id   = data.get('id') as string;
 
