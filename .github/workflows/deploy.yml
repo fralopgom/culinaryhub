@@ -85,6 +85,10 @@ jobs:
 
       - name: Health check
         run: |
-          sleep 5
-          curl -sf http://localhost:${{ env.HOST_PORT }} || \
-            (docker logs ${{ env.CONTAINER }} --tail 30 && exit 1)
+          for i in $(seq 1 18); do
+            curl -sf http://localhost:${{ env.HOST_PORT }} && exit 0
+            echo "Attempt $i/18 failed, retrying in 5s..."
+            sleep 5
+          done
+          docker logs ${{ env.CONTAINER }} --tail 30
+          exit 1
