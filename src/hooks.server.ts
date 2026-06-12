@@ -35,7 +35,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionToken = event.cookies.get('sygnet_session');
 	if (sessionToken) {
 		const user = await verifySession(sessionToken);
-		event.locals.user = user ?? null;
+		if (user) {
+			const [row] = await (await import('$lib/server/db')).default`
+				SELECT is_banned FROM users WHERE ethereum_address = ${user.address} LIMIT 1
+			`;
+			event.locals.user = row?.is_banned ? null : user;
+		} else {
+			event.locals.user = null;
+		}
 	} else {
 		event.locals.user = null;
 	}
