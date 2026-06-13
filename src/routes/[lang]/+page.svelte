@@ -136,9 +136,10 @@
 	inset: 0;
 	background: linear-gradient(
 		180deg,
-		rgba(15, 8, 4, 0.82) 0%,
-		rgba(30, 18, 10, 0.35) 35%,
-		rgba(30, 18, 10, 0.72) 100%
+		rgba(10, 5, 2, 0.75) 0%,
+		rgba(20, 10, 5, 0.60) 40%,
+		rgba(20, 10, 5, 0.60) 60%,
+		rgba(10, 5, 2, 0.75) 100%
 	);
 }
 
@@ -161,14 +162,19 @@
 .hero-content h1 {
 	font-size: clamp(2.4rem, 6vw, 4rem);
 	color: #fff;
-	text-shadow: 0 2px 24px rgba(0,0,0,0.35);
+	text-shadow:
+		0 1px 2px rgba(0,0,0,0.95),
+		0 2px 8px rgba(0,0,0,0.80),
+		0 4px 24px rgba(0,0,0,0.60);
+	-webkit-text-stroke: 0.3px rgba(0,0,0,0.4);
 	margin-bottom: 1rem;
 }
 
 .hero-sub {
 	font-size: clamp(1rem, 2.2vw, 1.15rem);
-	color: rgba(255,255,255,0.78);
+	color: rgba(255,255,255,0.92);
 	line-height: 1.65;
+	text-shadow: 0 1px 3px rgba(0,0,0,0.85), 0 2px 10px rgba(0,0,0,0.60);
 	margin-bottom: 2.5rem;
 }
 
