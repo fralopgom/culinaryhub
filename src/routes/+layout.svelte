@@ -5,7 +5,7 @@
 
 	let { children, data } = $props();
 
-	locale.set(data.lang ?? 'es');
+	$effect(() => { locale.set(data.lang ?? 'es'); });
 </script>
 
 <svelte:head>

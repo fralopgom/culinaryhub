@@ -4,14 +4,14 @@
 	import NotificationBell from '$lib/components/NotificationBell.svelte';
 
 	let { children, data } = $props();
-	locale.set(data.lang);
+	$effect(() => { locale.set(data.lang); });
 
 	const altLang = $derived(data.lang === 'es' ? 'en' : 'es');
 	const profileHandle = $derived(data.user?.address ?? data.user?.username ?? '');
 </script>
 
 <svelte:head>
-	<html lang={data.lang} />
+	<html lang={data.lang}></html>
 	<link rel="alternate" hreflang={altLang} href="/{altLang}" />
 </svelte:head>
 

@@ -5,7 +5,8 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let search = $state(data.search ?? '');
+	let search = $state('');
+	$effect(() => { search = data.search ?? ''; });
 
 	function applyFilter(key: string, value: string | null) {
 		const u = new URL(window.location.href);
