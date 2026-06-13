@@ -4,7 +4,7 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let { recipe, ingredients, tags, versions } = $derived(data);
+	let { recipe, tags, versions } = $derived(data);
 
 	let ratingScore = $state(0);
 	let flagReason  = $state('');
@@ -68,14 +68,8 @@
 	<section>
 		<h2>{$t('recipe_ingredients')}</h2>
 		<ul>
-			{#each ingredients as ing}
-				<li>
-					{#if ing.quantity}{ing.quantity}{/if}
-					{#if ing.unit}{ing.unit}{/if}
-					{ing.name}
-					{#if data.lang === 'es' && ing.notes_es} — {ing.notes_es}{/if}
-					{#if data.lang === 'en' && ing.notes_en} — {ing.notes_en}{/if}
-				</li>
+			{#each (recipe.free_ingredients ?? []) as ing}
+				<li>{ing}</li>
 			{/each}
 		</ul>
 	</section>

@@ -5,7 +5,7 @@ import db from './db';
 const DAILY_LIMIT_TIER1 = parseInt(env.DAILY_LIMIT_TIER1 ?? '1');
 const DAILY_LIMIT_TIER2 = parseInt(env.DAILY_LIMIT_TIER2 ?? '3');
 const DAILY_LIMIT_HIGH  = parseInt(env.DAILY_LIMIT_HIGH  ?? '10');
-const MIN_WALLET_TIER   = parseInt(env.MIN_WALLET_TIER   ?? '1');
+const MIN_WALLET_TIER   = parseInt(env.MIN_WALLET_TIER   ?? '0');
 
 export function walletCanPublish(walletTier: number): boolean {
 	return walletTier >= MIN_WALLET_TIER;

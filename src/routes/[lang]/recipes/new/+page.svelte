@@ -1,69 +1,94 @@
 <script lang="ts">
 	import { t } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
-	import { FORM_PHOTOS } from '$lib/utils/unsplash';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	type Ingredient = { ingredient_id: string; quantity: string; unit: string; notes_es: string; notes_en: string };
+	type Step = 'paste' | 'review';
 
-	let title           = $state('');
-	let description     = $state('');
-	let instructions    = $state<string[]>(['']);
-	let culture_id      = $state('');
-	let selectedIngreds = $state<Ingredient[]>([]);
-	let tags            = $state('');
-	let prep_time_min   = $state('');
-	let cook_time_min   = $state('');
-	let servings        = $state('');
-	let difficulty      = $state('');
-	let ai_level        = $state('none');
-	let license         = $state(false);
-	let submitting      = $state(false);
-	let error_msg       = $state('');
-	let website         = $state(''); // honeypot
+	let step      = $state<Step>('paste');
+	let rawText   = $state('');
+	let analyzing = $state(false);
+	let saving    = $state(false);
+	let errorMsg  = $state('');
+	let website   = $state(''); // honeypot
 
-	function addStep() { instructions = [...instructions, '']; }
-	function removeStep(i: number) { instructions = instructions.filter((_, idx) => idx !== i); }
+	let editTitle       = $state('');
+	let editDescription = $state('');
+	let editIngredients = $state<string[]>(['']);
+	let editSteps       = $state<string[]>(['']);
 
-	function addIngredient(id: string) {
-		if (!id || selectedIngreds.find(i => i.ingredient_id === id)) return;
-		selectedIngreds = [...selectedIngreds, { ingredient_id: id, quantity: '', unit: '', notes_es: '', notes_en: '' }];
+	let detailsOpen   = $state(false);
+	let culture_id    = $state('');
+	let prep_time_min = $state('');
+	let cook_time_min = $state('');
+	let servings      = $state('');
+	let difficulty    = $state('');
+	let ai_level      = $state('none');
+	let license       = $state(false);
+
+	async function analyze() {
+		if (!rawText.trim()) { errorMsg = $t('wizard_error_empty'); return; }
+		analyzing = true;
+		errorMsg  = '';
+		const res = await fetch('/api/recipes/extract', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ text: rawText })
+		});
+		if (res.ok) {
+			const d = await res.json();
+			editTitle       = d.title       || '';
+			editDescription = d.description || '';
+			editIngredients = d.ingredients?.length ? d.ingredients : [''];
+			editSteps       = d.steps?.length       ? d.steps       : [''];
+			step = 'review';
+		} else {
+			errorMsg = $t('error_server');
+		}
+		analyzing = false;
 	}
-	function removeIngredient(id: string) {
-		selectedIngreds = selectedIngreds.filter(i => i.ingredient_id !== id);
-	}
-	function ingredientName(id: string) {
-		return data.ingredients.find((i: { id: string; name: string }) => i.id === id)?.name ?? id;
-	}
 
-	async function submit() {
-		if (!title.trim() || !license) return;
-		submitting = true;
-		error_msg = '';
+	function addIngredient() { editIngredients = [...editIngredients, '']; }
+	function removeIngredient(i: number) { editIngredients = editIngredients.filter((_, j) => j !== i); }
+	function addStep()        { editSteps = [...editSteps, '']; }
+	function removeStep(i: number)       { editSteps = editSteps.filter((_, j) => j !== i); }
+
+	async function save(status: 'draft' | 'published') {
+		if (!editTitle.trim()) { errorMsg = $t('wizard_error_title'); return; }
+		const cleanSteps = editSteps.filter((s) => s.trim());
+		if (status === 'published' && !cleanSteps.length) { errorMsg = $t('wizard_error_steps'); return; }
+		if (status === 'published' && !license)           { errorMsg = $t('wizard_error_license'); return; }
+
+		saving   = true;
+		errorMsg = '';
 		const res = await fetch('/api/recipes', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				website,
-				title, description,
-				instructions: instructions.filter(s => s.trim()),
-				culture_id: culture_id || null,
-				ingredients: selectedIngreds,
-				tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-				prep_time_min: prep_time_min ? parseInt(prep_time_min) : null,
-				cook_time_min: cook_time_min ? parseInt(cook_time_min) : null,
-				servings: servings ? parseInt(servings) : null,
-				difficulty: difficulty || null,
+				title:            editTitle.trim(),
+				description:      editDescription.trim() || null,
+				free_ingredients: editIngredients.filter((s) => s.trim()),
+				instructions:     cleanSteps,
+				culture_id:       culture_id  || null,
+				prep_time_min:    prep_time_min ? parseInt(prep_time_min) : null,
+				cook_time_min:    cook_time_min ? parseInt(cook_time_min) : null,
+				servings:         servings      ? parseInt(servings)      : null,
+				difficulty:       difficulty    || null,
 				ai_level,
-				license_accepted: license
+				license_accepted: license,
+				status
 			})
 		});
 		const body = await res.json();
-		if (res.ok) goto(`/${data.lang}/recipes/${body.recipe.slug}`);
-		else error_msg = body.message ?? $t('error_server');
-		submitting = false;
+		if (res.ok) {
+			goto(`/${data.lang}/recipes/${body.recipe.slug}`);
+		} else {
+			errorMsg = body.message ?? $t('error_server');
+			saving = false;
+		}
 	}
 </script>
 
@@ -71,283 +96,264 @@
 	<title>{$t('publish_title')} — {$t('meta_site_name')}</title>
 </svelte:head>
 
-<!-- honeypot -->
 <input name="website" bind:value={website} style="display:none" tabindex="-1" autocomplete="off" />
 
-<div class="wizard">
+{#if step === 'paste'}
+<!-- ── PEGAR ─────────────────────────────────────────────── -->
+<div class="paste-screen">
+	<header class="paste-header">
+		<p class="eyebrow">✦ {$t('publish_title')}</p>
+		<h1>{$t('wizard_paste_title')}</h1>
+		<p class="subtitle">{$t('wizard_paste_subtitle')}</p>
+	</header>
 
-	<!-- Sidebar image — desktop only -->
-	<aside class="sidebar">
-		<div class="sidebar-img-wrap">
-			<img src={FORM_PHOTOS.soul} alt="" aria-hidden="true" loading="lazy" />
-			<div class="sidebar-overlay">
-				<blockquote>
-					"Cada receta es una carta de amor<br>a quienes vendrán después."
-				</blockquote>
-			</div>
-		</div>
-	</aside>
+	<textarea
+		class="paste-area"
+		bind:value={rawText}
+		placeholder={$t('wizard_paste_placeholder')}
+		rows="14"
+		autofocus
+	></textarea>
 
-	<!-- Form -->
-	<form class="form-body" onsubmit={(e) => { e.preventDefault(); submit(); }}>
+	{#if errorMsg}<p class="msg-err">{errorMsg}</p>{/if}
 
-		<header class="form-header">
-			<p class="form-eyebrow">✦ Nueva receta</p>
-			<h1>{$t('publish_title')}</h1>
-			<p class="form-intro">Tómate tu tiempo. Esta receta merece ser contada bien.</p>
-		</header>
+	<div class="paste-actions">
+		<button class="btn btn-primary analyze-btn" onclick={analyze} disabled={analyzing}>
+			{analyzing ? $t('wizard_analyzing') : $t('wizard_analyze')}
+		</button>
+		<a href="/{data.lang}" class="btn btn-ghost">{$t('wizard_cancel')}</a>
+	</div>
+</div>
 
-		<!-- ── SECCIÓN 1: EL ALMA ── -->
-		<div class="section-divider">El alma del plato</div>
+{:else}
+<!-- ── REVISAR ───────────────────────────────────────────── -->
+<div class="review-screen">
+	<div class="review-body">
+		<button class="back-link" onclick={() => { step = 'paste'; errorMsg = ''; }}>
+			← {$t('wizard_back_to_paste')}
+		</button>
 
-		<div class="field">
-			<label for="title">¿Cómo se llama?</label>
-			<input id="title" type="text" bind:value={title} required
-				placeholder="El nombre que le pone tu familia…" />
-		</div>
-
-		<div class="field">
-			<label for="desc">Su historia</label>
-			<textarea id="desc" bind:value={description} rows="4"
-				placeholder="De dónde viene este plato, quién te lo enseñó, qué recuerdos trae a la mesa…"></textarea>
-		</div>
-
-		<div class="field">
-			<label for="culture">Tradición culinaria</label>
-			<select id="culture" bind:value={culture_id}>
-				<option value="">Sin asignar</option>
-				{#each data.cultures as c}
-					<option value={c.id}>{'—'.repeat(c.level)} {c.name}</option>
-				{/each}
-			</select>
+		<div class="field title-field">
+			<label for="edit-title">{$t('wizard_title_label')}</label>
+			<input id="edit-title" type="text" bind:value={editTitle}
+				class="title-input" placeholder={$t('wizard_title_placeholder')} />
 		</div>
 
-		<div class="field">
-			<label for="tags">¿Cómo la describirías a un amigo?</label>
-			<input id="tags" type="text" bind:value={tags}
-				placeholder="tradición, domingo, abuela, mariscos, sin gluten…" />
-			<p class="field-hint">Separadas por comas.</p>
-		</div>
-
-		<!-- ── SECCIÓN 2: INGREDIENTES ── -->
-		<div class="section-divider">Los ingredientes</div>
-
-		<p class="section-intro-text">
-			Añádelos como si se los dictaras a un amigo que nunca ha cocinado este plato.
-		</p>
-
-		<div class="field">
-			<label for="ing-picker">Añadir ingrediente</label>
-			<select id="ing-picker"
-				onchange={(e) => {
-					addIngredient((e.target as HTMLSelectElement).value);
-					(e.target as HTMLSelectElement).value = '';
-				}}>
-				<option value="">Busca un ingrediente…</option>
-				{#each data.ingredients as ing}
-					<option value={ing.id}>{ing.name}</option>
-				{/each}
-			</select>
-		</div>
-
-		{#if selectedIngreds.length}
-		<div class="ingredient-list">
-			{#each selectedIngreds as ing}
+		<!-- Ingredientes -->
+		<div class="section-divider">{$t('wizard_ingredients_label')}</div>
+		<div class="ing-list">
+			{#each editIngredients as _, i}
 			<div class="ing-row">
-				<span class="ing-name">{ingredientName(ing.ingredient_id)}</span>
-				<input type="text" bind:value={ing.quantity} placeholder="Cantidad" class="ing-qty" />
-				<input type="text" bind:value={ing.unit}     placeholder="Unidad"   class="ing-unit" />
-				<button type="button" class="btn btn-ghost ing-remove"
-					onclick={() => removeIngredient(ing.ingredient_id)}
-					aria-label="Eliminar">×</button>
+				<input type="text" bind:value={editIngredients[i]}
+					placeholder="ej. 2 tazas de harina" />
+				{#if editIngredients.length > 1}
+				<button type="button" class="row-del" onclick={() => removeIngredient(i)} aria-label="Eliminar">×</button>
+				{/if}
 			</div>
 			{/each}
 		</div>
-		{/if}
+		<button type="button" class="btn add-row-btn" onclick={addIngredient}>
+			+ {$t('wizard_add_ingredient')}
+		</button>
 
-		<!-- ── SECCIÓN 3: PREPARACIÓN ── -->
-		<div class="section-divider">La preparación</div>
-
-		<p class="section-intro-text">
-			Cuéntanos cómo se hace, paso a paso, con la calma de quien lo ha hecho mil veces.
-		</p>
-
+		<!-- Pasos -->
+		<div class="section-divider">{$t('wizard_steps_label')}</div>
 		<div class="steps-list">
-			{#each instructions as step, i}
+			{#each editSteps as _, i}
 			<div class="step-row">
 				<span class="step-num">{i + 1}</span>
 				<div class="step-field">
-					<textarea bind:value={instructions[i]} rows="2"
-						placeholder="Describe este paso…"></textarea>
-					{#if instructions.length > 1}
-					<button type="button" class="btn btn-ghost step-remove"
-						onclick={() => removeStep(i)} aria-label="Eliminar paso">×</button>
+					<textarea bind:value={editSteps[i]} rows="2"
+						placeholder={$t('wizard_step_placeholder')}></textarea>
+					{#if editSteps.length > 1}
+					<button type="button" class="row-del step-del" onclick={() => removeStep(i)} aria-label="Eliminar paso">×</button>
 					{/if}
 				</div>
 			</div>
 			{/each}
 		</div>
-
-		<button type="button" class="btn add-step-btn" onclick={addStep}>
-			+ Añadir un paso más
+		<button type="button" class="btn add-row-btn" onclick={addStep}>
+			+ {$t('wizard_add_step')}
 		</button>
 
-		<!-- ── SECCIÓN 4: DETALLES ── -->
-		<div class="section-divider">Los detalles</div>
+		<!-- Detalles opcionales -->
+		<button type="button" class="details-toggle"
+			onclick={() => detailsOpen = !detailsOpen}>
+			{detailsOpen ? '▾' : '▸'} {$t('wizard_details_toggle')}
+		</button>
 
-		<div class="details-grid">
+		{#if detailsOpen}
+		<div class="details-panel">
 			<div class="field">
-				<label for="prep">Preparación <span class="unit-hint">(minutos)</span></label>
-				<input id="prep" type="number" bind:value={prep_time_min} min="0" placeholder="30" />
+				<label for="culture">{$t('wizard_culture_label')}</label>
+				<select id="culture" bind:value={culture_id}>
+					<option value="">—</option>
+					{#each data.cultures as c}
+					<option value={c.id}>{'—'.repeat(c.level)} {c.name}</option>
+					{/each}
+				</select>
 			</div>
-			<div class="field">
-				<label for="cook">Cocción <span class="unit-hint">(minutos)</span></label>
-				<input id="cook" type="number" bind:value={cook_time_min} min="0" placeholder="45" />
-			</div>
-			<div class="field">
-				<label for="servings">Raciones</label>
-				<input id="servings" type="number" bind:value={servings} min="1" placeholder="4" />
-			</div>
-		</div>
 
-		<div class="details-row">
+			<div class="details-grid">
+				<div class="field">
+					<label for="prep">{$t('wizard_prep_label')}</label>
+					<input id="prep" type="number" bind:value={prep_time_min} min="0" placeholder="30" />
+				</div>
+				<div class="field">
+					<label for="cook">{$t('wizard_cook_label')}</label>
+					<input id="cook" type="number" bind:value={cook_time_min} min="0" placeholder="45" />
+				</div>
+				<div class="field">
+					<label for="srv">{$t('wizard_servings_label')}</label>
+					<input id="srv" type="number" bind:value={servings} min="1" placeholder="4" />
+				</div>
+			</div>
+
 			<div class="field">
-				<label for="diff">¿Cuánta paciencia requiere?</label>
+				<label for="diff">{$t('wizard_difficulty_label')}</label>
 				<select id="diff" bind:value={difficulty}>
-					<option value="">Sin especificar</option>
+					<option value="">—</option>
 					<option value="easy">{$t('recipe_difficulty_easy')}</option>
 					<option value="medium">{$t('recipe_difficulty_medium')}</option>
 					<option value="hard">{$t('recipe_difficulty_hard')}</option>
 				</select>
 			</div>
+
 			<div class="field">
-				<label for="ai">¿Te ha ayudado la inteligencia artificial?</label>
+				<label for="ai">{$t('wizard_ai_label')}</label>
 				<select id="ai" bind:value={ai_level}>
-					<option value="none">No, es completamente mía</option>
-					<option value="assisted">Me ayudó a redactar o traducir</option>
-					<option value="generated">La generó una IA, yo la he validado</option>
-					<option value="mixed">Una mezcla de las dos</option>
+					<option value="none">{$t('wizard_ai_none')}</option>
+					<option value="assisted">{$t('wizard_ai_assisted')}</option>
+					<option value="generated">{$t('wizard_ai_generated')}</option>
+					<option value="mixed">{$t('wizard_ai_mixed')}</option>
 				</select>
 			</div>
 		</div>
-
-		<!-- ── FIRMA ── -->
-		<div class="section-divider">Tu firma</div>
-
-		<label class="checkbox-label field">
-			<input type="checkbox" bind:checked={license} required />
-			<span>
-				Esta receta es un legado abierto. La comparto bajo licencia
-				<strong>CC BY-SA 4.0</strong> para que otros puedan preservarla y construir sobre ella.
-			</span>
-		</label>
-
-		{#if error_msg}
-			<p class="msg-err field">{error_msg}</p>
 		{/if}
 
-		<div class="submit-row">
-			<button type="submit" class="btn btn-primary submit-btn"
-				disabled={submitting || !license || !title.trim()}>
-				{submitting ? 'Guardando…' : 'Guardar esta receta'}
-			</button>
-			<a href="/{data.lang}" class="btn btn-ghost">Cancelar</a>
-		</div>
+		<label class="checkbox-label license-check">
+			<input type="checkbox" bind:checked={license} />
+			<span>{$t('wizard_license_text')}</span>
+		</label>
 
-	</form>
+		{#if errorMsg}<p class="msg-err error-inline">{errorMsg}</p>{/if}
+	</div>
+
+	<div class="sticky-bar">
+		<button class="btn draft-btn" onclick={() => save('draft')} disabled={saving}>
+			{$t('wizard_save_draft')}
+		</button>
+		<button class="btn btn-primary publish-btn" onclick={() => save('published')} disabled={saving}>
+			{saving ? '…' : $t('wizard_publish')}
+		</button>
+	</div>
 </div>
+{/if}
 
 <style>
-/* LAYOUT */
-.wizard {
-	display: grid;
-	grid-template-columns: 340px 1fr;
-	min-height: calc(100dvh - var(--nav-h));
-	gap: 0;
-}
-
-/* SIDEBAR */
-.sidebar {
-	position: sticky;
-	top: var(--nav-h);
-	height: calc(100dvh - var(--nav-h));
-	overflow: hidden;
-}
-.sidebar-img-wrap { position: relative; width: 100%; height: 100%; }
-.sidebar-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
-.sidebar-overlay {
-	position: absolute;
-	inset: 0;
-	background: linear-gradient(to top, rgba(20,12,5,0.8) 0%, rgba(20,12,5,0.15) 60%);
-	display: flex;
-	align-items: flex-end;
-	padding: 2.5rem;
-}
-blockquote {
-	font-family: var(--font-serif);
-	font-style: italic;
-	font-size: 1.05rem;
-	color: rgba(255,255,255,0.88);
-	line-height: 1.65;
-	border: none;
-}
-
-/* FORM */
-.form-body {
-	padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 4rem);
-	max-width: 680px;
+/* ── PASTE ─────────────────────────────────────────── */
+.paste-screen {
+	max-width: 660px;
+	margin: 0 auto;
+	padding: clamp(2rem, 5vw, 4rem) var(--pad);
 	display: flex;
 	flex-direction: column;
+	gap: 1.5rem;
 }
-
-.form-header { margin-bottom: 3rem; }
-.form-eyebrow {
+.eyebrow {
 	font-size: 0.7rem;
 	font-weight: 700;
 	letter-spacing: 0.15em;
 	text-transform: uppercase;
 	color: var(--terra);
-	margin-bottom: 0.6rem;
+	margin-bottom: 0.4rem;
 }
-.form-header h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-bottom: 0.5rem; }
-.form-intro { color: var(--muted); font-size: 0.95rem; margin: 0; }
+.paste-header h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-bottom: 0.5rem; }
+.subtitle { color: var(--muted); font-size: 0.95rem; margin: 0; }
 
-.section-intro-text {
-	color: var(--muted);
-	font-size: 0.9rem;
-	font-style: italic;
-	margin-bottom: 1.5rem;
-	margin-top: -0.5rem;
+.paste-area {
+	width: 100%;
+	min-height: 240px;
+	border: 1.5px solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: 1.25rem;
+	font-family: var(--font-sans);
+	font-size: 0.95rem;
+	line-height: 1.75;
+	color: var(--text);
+	background: var(--surface);
+	resize: vertical;
+	transition: border-color 0.2s;
 }
+.paste-area:focus { outline: none; border-color: var(--terra); }
 
-/* INGREDIENTS */
-.ingredient-list {
+.paste-actions { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.analyze-btn {
+	padding: 0.85rem 2rem;
+	font-size: 1rem;
+	box-shadow: 0 4px 16px rgba(184,92,56,0.3);
+}
+.analyze-btn:not(:disabled):hover { transform: translateY(-1px); }
+
+/* ── REVIEW ────────────────────────────────────────── */
+.review-screen {
+	max-width: 660px;
+	margin: 0 auto;
+	padding-bottom: 90px;
+}
+.review-body {
+	padding: clamp(1.5rem, 4vw, 3rem) var(--pad) 2rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0;
-	margin-bottom: 1rem;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	overflow: hidden;
-	background: var(--surface);
 }
-.ing-row {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	padding: 0.65rem 1rem;
-	border-bottom: 1px solid var(--border);
+.back-link {
+	background: none;
+	border: none;
+	color: var(--muted);
+	font-size: 0.875rem;
+	cursor: pointer;
+	padding: 0;
+	margin-bottom: 1.75rem;
+	align-self: flex-start;
 }
-.ing-row:last-child { border-bottom: none; }
-.ing-name { flex: 1; font-size: 0.9rem; color: var(--text); min-width: 0; }
-.ing-qty, .ing-unit { width: 70px; font-size: 0.875rem; border-bottom: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.3rem 0.5rem; background: var(--cream); }
-.ing-qty:focus, .ing-unit:focus { border-color: var(--terra); box-shadow: none; }
-.ing-remove { padding: 0.25rem 0.5rem; font-size: 1.1rem; color: var(--subtle) !important; }
-.ing-remove:hover { color: var(--terra) !important; }
+.back-link:hover { color: var(--terra); }
 
-/* STEPS */
-.steps-list { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1rem; }
-.step-row { display: flex; gap: 1rem; align-items: flex-start; }
+/* Title */
+.title-field { margin-bottom: 1.5rem; }
+.title-input {
+	font-family: var(--font-serif);
+	font-size: clamp(1.4rem, 3vw, 1.9rem);
+	font-weight: 700;
+	color: var(--text);
+	width: 100%;
+	border: none;
+	border-bottom: 2px solid var(--border);
+	background: transparent;
+	padding: 0.3rem 0;
+	transition: border-color 0.2s;
+}
+.title-input:focus { outline: none; border-bottom-color: var(--terra); }
+.title-input::placeholder { color: var(--subtle); font-weight: 400; font-style: italic; }
+
+/* Ingredients */
+.ing-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+.ing-row { display: flex; align-items: center; gap: 0.5rem; }
+.ing-row input {
+	flex: 1;
+	padding: 0.55rem 0;
+	border: none;
+	border-bottom: 1px solid var(--border);
+	border-radius: 0;
+	background: transparent;
+	font-size: 0.95rem;
+	color: var(--text);
+}
+.ing-row input:focus { outline: none; border-bottom-color: var(--terra); }
+.ing-row input::placeholder { color: var(--subtle); font-style: italic; }
+
+/* Steps */
+.steps-list { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 0.75rem; }
+.step-row { display: flex; gap: 0.75rem; align-items: flex-start; }
 .step-num {
 	width: 1.75rem;
 	height: 1.75rem;
@@ -363,69 +369,108 @@ blockquote {
 	margin-top: 0.5rem;
 }
 .step-field { flex: 1; position: relative; }
-.step-field textarea { padding-bottom: 0; }
-.step-remove {
-	position: absolute;
-	top: 0.25rem;
-	right: 0;
-	padding: 0.2rem 0.4rem;
-	font-size: 1rem;
-	color: var(--subtle) !important;
+.step-field textarea {
+	width: 100%;
+	min-height: 56px;
+	padding: 0.5rem 2rem 0.5rem 0;
+	border: none;
+	border-bottom: 1px solid var(--border);
+	border-radius: 0;
+	background: transparent;
+	font-size: 0.95rem;
+	color: var(--text);
+	resize: vertical;
 }
-.step-remove:hover { color: var(--terra) !important; }
+.step-field textarea:focus { outline: none; border-bottom-color: var(--terra); }
+.step-field textarea::placeholder { color: var(--subtle); font-style: italic; }
 
-.add-step-btn {
+/* Delete buttons */
+.row-del {
+	background: none;
+	border: none;
+	color: var(--subtle);
+	font-size: 1.1rem;
+	cursor: pointer;
+	padding: 0.2rem 0.4rem;
+	flex-shrink: 0;
+	line-height: 1;
+	transition: color 0.15s;
+}
+.row-del:hover { color: var(--terra); }
+.step-del { position: absolute; top: 0.3rem; right: 0; }
+
+.add-row-btn {
 	align-self: flex-start;
 	border-style: dashed;
 	color: var(--muted);
 	font-size: 0.875rem;
-	padding: 0.5rem 1rem;
-	margin-bottom: 0.5rem;
+	padding: 0.45rem 1rem;
+	margin-bottom: 1.75rem;
 }
-.add-step-btn:hover { border-color: var(--terra); color: var(--terra); background: var(--terra-light); }
+.add-row-btn:hover { border-color: var(--terra); color: var(--terra); background: var(--terra-light); }
 
-/* DETAILS */
+/* Details */
+.details-toggle {
+	background: none;
+	border: none;
+	color: var(--muted);
+	font-size: 0.875rem;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 0.5rem 0;
+	margin-bottom: 0.75rem;
+	align-self: flex-start;
+	letter-spacing: 0.02em;
+	transition: color 0.15s;
+}
+.details-toggle:hover { color: var(--terra); }
+
+.details-panel {
+	background: var(--cream);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: 1.5rem;
+	margin-bottom: 1.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
 .details-grid {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
-	gap: 1.5rem;
-}
-.details-row {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 1.5rem;
-	margin-top: 0.5rem;
+	gap: 1.25rem;
 }
 
-.unit-hint { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.7rem; }
+.license-check { margin-top: 1.25rem; margin-bottom: 0.5rem; }
+.error-inline  { margin-top: 0.5rem; }
 
-/* SUBMIT */
-.submit-row {
+/* Sticky bar */
+.sticky-bar {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background: rgba(255,255,255,0.97);
+	backdrop-filter: blur(8px);
+	border-top: 1px solid var(--border);
+	padding: 0.875rem var(--pad);
 	display: flex;
-	gap: 1rem;
-	align-items: center;
-	margin-top: 1rem;
-	flex-wrap: wrap;
+	gap: 0.75rem;
+	justify-content: flex-end;
+	z-index: 50;
 }
-.submit-btn {
-	padding: 0.85rem 2.5rem;
-	font-size: 1rem;
-	letter-spacing: 0.02em;
-	box-shadow: 0 4px 16px rgba(184,92,56,0.3);
+.draft-btn { color: var(--muted); }
+.draft-btn:hover { background: var(--cream); color: var(--text); }
+.publish-btn {
+	padding: 0.75rem 2rem;
+	box-shadow: 0 4px 14px rgba(184,92,56,0.3);
 }
-.submit-btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(184,92,56,0.4); }
+.publish-btn:not(:disabled):hover { transform: translateY(-1px); }
 
-/* RESPONSIVE */
-@media (max-width: 900px) {
-	.wizard { grid-template-columns: 1fr; }
-	.sidebar { display: none; }
-	.form-body { max-width: 100%; padding: 2rem var(--pad); }
-}
 @media (max-width: 560px) {
 	.details-grid { grid-template-columns: 1fr 1fr; }
-	.details-row  { grid-template-columns: 1fr; }
-}
-@media (max-width: 400px) {
-	.details-grid { grid-template-columns: 1fr; }
+	.sticky-bar   { justify-content: stretch; }
+	.draft-btn,
+	.publish-btn  { flex: 1; justify-content: center; }
 }
 </style>
