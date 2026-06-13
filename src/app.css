@@ -1,0 +1,173 @@
+/* === RESET === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+img, video { max-width: 100%; height: auto; display: block; }
+
+/* === TOKENS === */
+:root {
+  --bg:          #faf8f5;
+  --surface:     #ffffff;
+  --border:      #e8e4de;
+  --text:        #1c1917;
+  --muted:       #78716c;
+  --accent:      #c2652a;
+  --accent-dark: #9e4f1e;
+  --radius:      8px;
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.08);
+  --shadow:      0 2px 8px rgba(0,0,0,.1);
+  --max-w:       1100px;
+  --pad:         clamp(1rem, 4vw, 2rem);
+  --nav-h:       60px;
+}
+
+/* === BASE === */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.65;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: var(--pad);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-dark); text-decoration: underline; }
+
+h1 { font-size: clamp(1.6rem, 5vw, 2.6rem); line-height: 1.2; font-weight: 700; margin-bottom: 0.5rem; }
+h2 { font-size: clamp(1.15rem, 3vw, 1.5rem); font-weight: 600; margin: 1.25rem 0 0.5rem; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p  { margin-top: 0.4rem; }
+
+ul, ol { padding-left: 1.25rem; }
+li { margin: 0.25rem 0; }
+
+details > summary { cursor: pointer; color: var(--muted); font-size: 0.875rem; }
+
+/* === FORMS === */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="search"],
+textarea,
+select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+textarea { resize: vertical; min-height: 80px; }
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+label input[type="checkbox"] { width: auto; }
+
+/* === BUTTONS === */
+button, .btn {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  transition: background 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+button:hover { background: var(--bg); }
+
+button[data-primary], .btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+button[data-primary]:hover, .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* === TABLE (admin pages) === */
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-weight: 600; color: var(--muted); background: var(--bg); }
+tr:last-child td { border-bottom: none; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* === CARD === */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+
+/* === GRID === */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 560px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 900px)  { .grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* === HERO === */
+.hero {
+  text-align: center;
+  padding: clamp(2rem, 8vw, 5rem) 0;
+}
+.hero p { color: var(--muted); font-size: clamp(1rem, 2.5vw, 1.2rem); margin: 0.75rem 0 2rem; }
+.hero-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+/* === FOOTER === */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 1.25rem var(--pad);
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: var(--max-w);
+  margin: auto auto 0;
+  width: 100%;
+}
+footer a { color: var(--muted); }
+footer a:hover { color: var(--accent); }
+
+/* === INLINE STATUS === */
+.msg-ok  { color: #2d7a2d; }
+.msg-err { color: #c0392b; }

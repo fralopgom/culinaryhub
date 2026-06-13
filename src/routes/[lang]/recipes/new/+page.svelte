@@ -83,10 +83,6 @@
 
 <h1>{$t('publish_title')}</h1>
 
-{#if overlap_count > 0}
-	<p>{$t('recipe_overlap_warning', { values: { count: overlap_count } })}</p>
-{/if}
-
 <form onsubmit={(e) => { e.preventDefault(); submit(); }}>
 	<!-- honeypot: invisible for humans -->
 	<input name="website" bind:value={website} style="display:none" tabindex="-1" autocomplete="off" />
@@ -115,7 +111,7 @@
 			{/each}
 		</select>
 		{#each selectedIngreds as ing, i}
-			<div>
+			<div class="ing-row">
 				<span>{ingredientName(ing.ingredient_id)}</span>
 				<input type="text" bind:value={ing.quantity} placeholder="qty" />
 				<input type="text" bind:value={ing.unit}     placeholder="unit" />
@@ -127,7 +123,7 @@
 	<section>
 		<h2>{$t('recipe_instructions')}</h2>
 		{#each instructions as step, i}
-			<div>
+			<div class="step-row">
 				<textarea bind:value={instructions[i]} rows="2"></textarea>
 				{#if instructions.length > 1}
 					<button type="button" onclick={() => removeStep(i)}>✕</button>
@@ -139,7 +135,7 @@
 
 	<input type="text" bind:value={tags} placeholder="tag1, tag2" />
 
-	<div>
+	<div class="row">
 		<input type="number" bind:value={prep_time_min} min="0" placeholder="prep min" />
 		<input type="number" bind:value={cook_time_min} min="0" placeholder="cook min" />
 		<input type="number" bind:value={servings}      min="1" placeholder="servings" />
@@ -159,14 +155,59 @@
 		<option value="mixed">{$t('recipe_ai_mixed')}</option>
 	</select>
 
-	<label>
+	<label class="checkbox-row">
 		<input type="checkbox" bind:checked={license} required />
 		{$t('recipe_license_accept')}
 	</label>
 
-	{#if error_msg}<p>{error_msg}</p>{/if}
+	{#if overlap_count > 0}<p class="warning">{$t('recipe_overlap_warning', { values: { count: overlap_count } })}</p>{/if}
+	{#if error_msg}<p class="error">{error_msg}</p>{/if}
 
-	<button type="submit" disabled={submitting || !license}>
+	<button type="submit" data-primary disabled={submitting || !license}>
 		{submitting ? '…' : $t('publish_submit')}
 	</button>
 </form>
+
+<style>
+h1 { margin-bottom: 1.5rem; }
+
+form {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	max-width: 680px;
+}
+
+form section {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 1rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+}
+
+form section h2 { margin: 0 0 0.25rem; font-size: 1rem; }
+
+.row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.row input { flex: 1; min-width: 80px; }
+
+.ing-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ing-row span { flex: 1; min-width: 100px; font-size: 0.875rem; }
+.ing-row input { width: 70px; }
+.ing-row button { padding: 0.35rem 0.6rem; color: var(--muted); }
+
+.step-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+.step-row textarea { flex: 1; }
+.step-row button { margin-top: 0.25rem; padding: 0.35rem 0.6rem; color: var(--muted); }
+
+label.checkbox-row { flex-direction: row; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); }
+
+.error { color: #c0392b; font-size: 0.875rem; }
+.warning { color: #c2652a; font-size: 0.875rem; }
+
+@media (max-width: 500px) {
+	.row { flex-direction: column; }
+}
+</style>
