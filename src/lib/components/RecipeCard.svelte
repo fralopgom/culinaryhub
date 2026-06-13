@@ -9,16 +9,19 @@
 			avg_score: string; rating_count: number;
 			difficulty: string | null; ai_level: string;
 			prep_time_min: number | null; cook_time_min: number | null;
+			photo_url?: string | null;
 		};
 		lang: string;
 	} = $props();
 
-	const imgSrc = $derived(recipePhoto(recipe.slug));
+	const fallbackSrc = $derived(recipePhoto(recipe.slug));
+	const imgSrc      = $derived(recipe.photo_url ?? fallbackSrc);
 </script>
 
 <article class="card">
 	<a class="card-img-wrap" href="/{lang}/recipes/{recipe.slug}" tabindex="-1" aria-hidden="true">
-		<img src={imgSrc} alt={recipe.title} loading="lazy" />
+		<img src={imgSrc} alt={recipe.title} loading="lazy"
+			onerror={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackSrc; }} />
 		{#if recipe.culture_name}
 			<span class="culture-pill">{recipe.culture_name}</span>
 		{/if}

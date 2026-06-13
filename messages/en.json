@@ -68,6 +68,10 @@
   "publish_submit": "Publish recipe",
   "publish_draft": "Save draft",
 
+  "wizard_photo_label": "Recipe photo (optional)",
+  "wizard_photo_hint": "Paste a direct image URL (must start with https://). ✅ Works: Imgur, public Google Drive. ⚠️ Instagram and Google Photos block hotlinking — right-click the image in your browser and choose «Copy image address».",
+  "wizard_photo_ok": "Image loaded successfully",
+  "wizard_photo_warn": "Cannot load this URL — the site may block external access. Try Imgur instead.",
   "profile_alias_placeholder": "Your public alias",
   "profile_alias_save": "Save",
   "profile_alias_edit": "Edit alias",

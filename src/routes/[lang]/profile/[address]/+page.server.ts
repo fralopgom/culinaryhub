@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const recipes = await db`
 		SELECT r.id, r.slug, r.title, r.description, r.difficulty, r.ai_level,
-		       r.prep_time_min, r.cook_time_min,
+		       r.prep_time_min, r.cook_time_min, r.photo_url,
 		       u.username AS author_username, u.display_name AS author_display_name,
 		       u.prestige_score AS author_prestige,
 		       c.${db(nameCol)} AS culture_name, c.slug AS culture_slug,

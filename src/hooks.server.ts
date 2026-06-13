@@ -1,6 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { verifySession } from '$lib/server/sygnet';
 import { getSession, computeAccountTier } from '$lib/server/auth';
+import { createSeedRecipe } from '$lib/server/seed';
 
 const securityHeaders = {
 	'X-Frame-Options': 'DENY',
@@ -59,8 +60,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 						prestige_score = excluded.prestige_score,
 						wallet_tier    = excluded.wallet_tier,
 						updated_at     = now()
-					RETURNING id, is_banned, is_admin
+					RETURNING id, is_banned, is_admin, (xmax::text::bigint = 0) AS is_new
 				`;
+				if (row?.is_new) await createSeedRecipe(row.id);
 				if (row && !row.is_banned) {
 					event.locals.user = {
 						id:             row.id,

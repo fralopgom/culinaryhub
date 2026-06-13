@@ -55,9 +55,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const {
 		title, description, free_ingredients, instructions,
 		culture_id, prep_time_min, cook_time_min, servings,
-		difficulty, ai_level, license_accepted,
+		difficulty, ai_level, license_accepted, photo_url,
 		status: reqStatus
 	} = body;
+
+	const cleanPhotoUrl = typeof photo_url === 'string' && photo_url.startsWith('https://')
+		? photo_url.trim().slice(0, 500)
+		: null;
 
 	const status = reqStatus === 'draft' ? 'draft' : 'published';
 
@@ -102,13 +106,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			INSERT INTO recipes
 				(slug, author_id, culture_id, title, description, instructions,
 				 prep_time_min, cook_time_min, servings, difficulty, ai_level,
-				 content_hash, free_ingredients, status)
+				 content_hash, free_ingredients, photo_url, status)
 			VALUES
 				(${slug}, ${user.id}, ${culture_id ?? null}, ${title.trim()},
 				 ${description ?? null}, ${cleanSteps},
 				 ${prep_time_min ?? null}, ${cook_time_min ?? null},
 				 ${servings ?? null}, ${difficulty || null}, ${ai_level ?? 'none'},
-				 ${hash}, ${cleanIngredients}, ${status})
+				 ${hash}, ${cleanIngredients}, ${cleanPhotoUrl}, ${status})
 			RETURNING id, slug, title, version
 		`;
 

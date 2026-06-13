@@ -1,6 +1,6 @@
 import { redirect, error } from '@sveltejs/kit';
 import { exchangeGoogleCode, exchangeGithubCode, createSession } from '$lib/server/auth';
-import { slugify } from '$lib/utils/slug';
+import { createSeedRecipe } from '$lib/server/seed';
 import db from '$lib/server/db';
 
 export const GET = async ({ params, url, cookies }) => {
@@ -50,6 +50,7 @@ export const GET = async ({ params, url, cookies }) => {
 				RETURNING id
 			`;
 			userId = u.id;
+			await createSeedRecipe(userId, lang as 'es' | 'en');
 		}
 	}
 

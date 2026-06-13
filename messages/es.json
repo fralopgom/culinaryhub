@@ -69,6 +69,10 @@
   "wizard_error_steps": "Añade al menos un paso de preparación",
   "wizard_error_license": "Acepta la licencia para publicar",
 
+  "wizard_photo_label": "Foto de la receta (opcional)",
+  "wizard_photo_hint": "Pega la URL directa de una imagen (debe empezar por https://). ✅ Funciona: Imgur, Google Drive público. ⚠️ Instagram y Google Photos bloquean el acceso desde otras webs — usa clic derecho → «Copiar dirección de imagen» en el navegador.",
+  "wizard_photo_ok": "Imagen cargada correctamente",
+  "wizard_photo_warn": "No se puede cargar esta URL — puede que el sitio bloquee el acceso. Prueba con Imgur.",
   "profile_alias_placeholder": "Tu alias público",
   "profile_alias_save": "Guardar",
   "profile_alias_edit": "Editar alias",

@@ -27,6 +27,8 @@
 	let difficulty    = $state('');
 	let ai_level      = $state('none');
 	let license       = $state(false);
+	let photo_url     = $state('');
+	let photoOk       = $state(false);
 
 	async function analyze() {
 		errorMsg = '';
@@ -86,6 +88,7 @@
 				servings:         servings      ? parseInt(servings)      : null,
 				difficulty:       difficulty    || null,
 				ai_level,
+				photo_url:        photo_url.trim().startsWith('https://') ? photo_url.trim() : null,
 				license_accepted: license,
 				status
 			})
@@ -237,6 +240,33 @@
 			</div>
 		</div>
 		{/if}
+
+		<!-- Foto -->
+		<div class="field photo-field">
+			<label for="photo">{$t('wizard_photo_label')}</label>
+			<input
+				id="photo"
+				type="url"
+				bind:value={photo_url}
+				placeholder="https://i.imgur.com/tu-foto.jpg"
+				oninput={() => photoOk = false}
+			/>
+			<p class="photo-hint">{$t('wizard_photo_hint')}</p>
+			{#if photo_url.startsWith('https://')}
+				<img
+					class="photo-preview"
+					src={photo_url}
+					alt="preview"
+					onload={() => photoOk = true}
+					onerror={() => photoOk = false}
+				/>
+				{#if photoOk}
+					<p class="photo-ok">✓ {$t('wizard_photo_ok')}</p>
+				{:else}
+					<p class="photo-warn">⚠ {$t('wizard_photo_warn')}</p>
+				{/if}
+			{/if}
+		</div>
 
 		<label class="checkbox-label license-check">
 			<input type="checkbox" bind:checked={license} />
@@ -449,6 +479,12 @@
 }
 
 .license-check { margin-top: 1.25rem; margin-bottom: 0.5rem; }
+
+.photo-field { margin-top: 1rem; }
+.photo-hint { font-size: 0.78rem; color: var(--muted); margin: 0.25rem 0 0.5rem; line-height: 1.4; }
+.photo-preview { width: 100%; max-height: 220px; object-fit: cover; border-radius: 6px; margin-top: 0.5rem; }
+.photo-ok   { font-size: 0.8rem; color: #2e7d32; margin-top: 0.25rem; }
+.photo-warn { font-size: 0.8rem; color: #b85c00; margin-top: 0.25rem; }
 .error-inline  { margin-top: 0.5rem; }
 
 /* Sticky bar */
