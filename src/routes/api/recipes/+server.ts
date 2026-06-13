@@ -105,7 +105,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				 content_hash, free_ingredients, status)
 			VALUES
 				(${slug}, ${user.id}, ${culture_id ?? null}, ${title.trim()},
-				 ${description ?? null}, ${JSON.stringify(cleanSteps)},
+				 ${description ?? null}, ${cleanSteps},
 				 ${prep_time_min ?? null}, ${cook_time_min ?? null},
 				 ${servings ?? null}, ${difficulty || null}, ${ai_level ?? 'none'},
 				 ${hash}, ${cleanIngredients}, ${status})
@@ -115,7 +115,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await tx`
 			INSERT INTO recipe_versions (recipe_id, version, title, description, instructions, content_hash)
 			VALUES (${r.id}, 1, ${title.trim()}, ${description ?? null},
-			        ${JSON.stringify(cleanSteps)}, ${hash})
+			        ${cleanSteps}, ${hash})
 		`;
 
 		if (status === 'published') {
