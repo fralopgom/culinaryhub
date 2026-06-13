@@ -50,6 +50,7 @@
   "notification_prestige_milestone": "You have reached {score} prestige points!",
 
   "wallet_connect": "Connect wallet",
+  "wallet_not_found": "MetaMask not found. Please install the extension.",
   "wallet_connected": "Connected as {address}",
   "wallet_disconnect": "Disconnect",
   "wallet_tier_warning": "Your wallet is too recent. You will be able to publish in {days} days.",

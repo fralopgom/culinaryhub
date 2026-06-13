@@ -45,7 +45,7 @@
 				<a href="/api/auth/github?lang={data.lang}" onclick={closeMenu}>{$t('auth_login_github')}</a>
 			{/if}
 			<a href="/{altLang}" onclick={closeMenu}>{altLang.toUpperCase()}</a>
-			<WalletConnect />
+			<WalletConnect user={data.user} />
 		</div>
 	</nav>
 </header>
