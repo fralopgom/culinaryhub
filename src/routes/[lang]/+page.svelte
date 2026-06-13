@@ -135,8 +135,9 @@
 	position: absolute;
 	inset: 0;
 	background: linear-gradient(
-		170deg,
-		rgba(44, 30, 18, 0.45) 0%,
+		180deg,
+		rgba(15, 8, 4, 0.82) 0%,
+		rgba(30, 18, 10, 0.35) 35%,
 		rgba(30, 18, 10, 0.72) 100%
 	);
 }
