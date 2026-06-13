@@ -69,6 +69,11 @@
   "wizard_error_steps": "Añade al menos un paso de preparación",
   "wizard_error_license": "Acepta la licencia para publicar",
 
+  "profile_alias_placeholder": "Tu alias público",
+  "profile_alias_save": "Guardar",
+  "profile_alias_edit": "Editar alias",
+  "profile_no_recipes": "Aún no hay recetas publicadas.",
+  "cancel": "Cancelar",
   "profile_prestige": "Prestigio",
   "profile_recipes_published": "Recetas publicadas",
   "profile_member_since": "Miembro desde {date}",

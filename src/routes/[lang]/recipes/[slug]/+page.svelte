@@ -47,7 +47,7 @@
 	<h1>{recipe.title}</h1>
 
 	<p>
-		{$t('recipe_by', { values: { author: recipe.author_username } })}
+		{$t('recipe_by', { values: { author: recipe.author_display_name ?? recipe.author_username } })}
 		· <PrestigeBadge score={recipe.author_prestige} />
 		{#if recipe.culture_name}
 			· <a href="/{data.lang}/cultures/{recipe.culture_slug}">{recipe.culture_name}</a>

@@ -5,7 +5,7 @@
 	let { recipe, lang }: {
 		recipe: {
 			id: string; slug: string; title: string; description: string | null;
-			author_username: string; culture_name: string | null;
+			author_username: string; author_display_name?: string | null; culture_name: string | null;
 			avg_score: string; rating_count: number;
 			difficulty: string | null; ai_level: string;
 			prep_time_min: number | null; cook_time_min: number | null;
@@ -34,7 +34,7 @@
 	</div>
 
 	<footer class="card-footer">
-		<span class="author">{$t('recipe_by', { values: { author: recipe.author_username } })}</span>
+		<span class="author">{$t('recipe_by', { values: { author: recipe.author_display_name ?? recipe.author_username } })}</span>
 		<div class="meta">
 			{#if recipe.rating_count > 0}
 				<span class="rating">★ {recipe.avg_score}</span>

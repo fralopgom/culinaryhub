@@ -43,10 +43,10 @@ export const GET = async ({ params, url, cookies }) => {
 			         WHERE id = ${byEmail.id}`;
 			userId = byEmail.id;
 		} else {
-			const username = slugify(oauthUser.name).slice(0, 20) + '-' + Date.now().toString(36).slice(-4);
+			const username = 'chef-' + Date.now().toString(36).slice(-6);
 			const [u] = await db`
-				INSERT INTO users (oauth_provider, oauth_id, email, username)
-				VALUES (${provider}, ${oauthUser.id}, ${oauthUser.email}, ${username})
+				INSERT INTO users (oauth_provider, oauth_id, email, username, display_name)
+				VALUES (${provider}, ${oauthUser.id}, ${oauthUser.email}, ${username}, ${null})
 				RETURNING id
 			`;
 			userId = u.id;

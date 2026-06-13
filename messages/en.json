@@ -68,6 +68,11 @@
   "publish_submit": "Publish recipe",
   "publish_draft": "Save draft",
 
+  "profile_alias_placeholder": "Your public alias",
+  "profile_alias_save": "Save",
+  "profile_alias_edit": "Edit alias",
+  "profile_no_recipes": "No published recipes yet.",
+  "cancel": "Cancel",
   "profile_prestige": "Prestige",
   "profile_recipes_published": "Published recipes",
   "profile_member_since": "Member since {date}",

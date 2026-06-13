@@ -6,8 +6,8 @@ export const load: PageServerLoad = async ({ params }) => {
 	const nameCol = params.lang === 'en' ? 'name_en' : 'name_es';
 
 	const [recipe] = await db`
-		SELECT r.*, u.username AS author_username, u.address AS author_address,
-		       u.prestige_score AS author_prestige,
+		SELECT r.*, u.username AS author_username, u.display_name AS author_display_name,
+		       u.address AS author_address, u.prestige_score AS author_prestige,
 		       c.${db(nameCol)} AS culture_name, c.slug AS culture_slug,
 		       COALESCE(AVG(rt.score), 0)::numeric(3,1) AS avg_score,
 		       COUNT(DISTINCT rt.id)::int AS rating_count
