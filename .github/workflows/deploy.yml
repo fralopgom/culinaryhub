@@ -85,10 +85,16 @@ jobs:
 
       - name: Health check
         run: |
+          echo "Container status:"
+          docker ps -a | grep ${{ env.CONTAINER }} || true
           for i in $(seq 1 18); do
-            docker exec ${{ env.CONTAINER }} wget -qO /dev/null http://localhost:${{ env.CTR_PORT }} 2>/dev/null && exit 0
-            echo "Attempt $i/18 failed, retrying in 5s..."
+            STATUS=$(docker inspect --format='{{.State.Status}}' ${{ env.CONTAINER }} 2>&1)
+            echo "Attempt $i/18 — container status: $STATUS"
+            docker exec ${{ env.CONTAINER }} wget -qO /dev/null http://localhost:${{ env.CTR_PORT }} && exit 0
             sleep 5
           done
+          echo "=== Container logs ==="
           docker logs ${{ env.CONTAINER }} --tail 30
+          echo "=== Container inspect ==="
+          docker inspect ${{ env.CONTAINER }} --format='{{.State}}'
           exit 1
