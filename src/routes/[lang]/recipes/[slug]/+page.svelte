@@ -11,6 +11,8 @@
 	let submitting  = $state(false);
 	let message     = $state('');
 
+	const isOwn = $derived(!!data.user && data.user.id === recipe.author_id);
+
 	async function submitRating() {
 		submitting = true;
 		const res = await fetch('/api/ratings', {
@@ -102,30 +104,74 @@
 		</details>
 	{/if}
 
-	{#if data.user}
-		<section>
-			{#each [1,2,3,4,5] as n}
-				<button onclick={() => ratingScore = n} aria-pressed={ratingScore === n}>★{n}</button>
-			{/each}
+	{#if data.user && !isOwn}
+		<section class="rating-section">
+			<p class="rating-label">{$t('recipe_rate_label')}</p>
+			<div class="stars">
+				{#each [1,2,3,4,5] as n}
+					<button
+						class="star"
+						class:active={ratingScore >= n}
+						onclick={() => ratingScore = n}
+						aria-label="★{n}"
+					>★</button>
+				{/each}
+			</div>
 			{#if ratingScore > 0}
-				<button onclick={submitRating} disabled={submitting}>✓</button>
+				<button class="btn-rate" onclick={submitRating} disabled={submitting}>
+					{submitting ? '…' : $t('recipe_rate_submit')}
+				</button>
 			{/if}
+			{#if message}<p class="rate-msg">{message}</p>{/if}
 		</section>
 
-		<details>
-			<summary>⚑ Flag</summary>
+		<details class="flag-details">
+			<summary>⚑ {$t('recipe_flag_label')}</summary>
 			<select bind:value={flagReason}>
 				<option value="">—</option>
-				<option value="plagiarism">plagiarism</option>
-				<option value="dangerous">dangerous</option>
-				<option value="inappropriate">inappropriate</option>
-				<option value="duplicate">duplicate</option>
+				<option value="plagiarism">{$t('flag_plagiarism')}</option>
+				<option value="dangerous">{$t('flag_dangerous')}</option>
+				<option value="inappropriate">{$t('flag_inappropriate')}</option>
+				<option value="duplicate">{$t('flag_duplicate')}</option>
 			</select>
 			{#if flagReason}
-				<button onclick={submitFlag} disabled={submitting}>⚑</button>
+				<button onclick={submitFlag} disabled={submitting}>⚑ {$t('recipe_flag_submit')}</button>
 			{/if}
 		</details>
-
-		{#if message}<p>{message}</p>{/if}
 	{/if}
 </article>
+
+<style>
+.rating-section { margin: 2rem 0 1rem; }
+.rating-label   { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
+
+.stars { display: flex; gap: 0.25rem; margin-bottom: 0.75rem; }
+.star  {
+	font-size: 1.8rem;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: #ccc;
+	padding: 0;
+	line-height: 1;
+	transition: color 0.1s, transform 0.1s;
+}
+.star:hover,
+.star.active { color: #e8a020; }
+.star:hover  { transform: scale(1.15); }
+
+.btn-rate {
+	padding: 0.4rem 1.2rem;
+	background: var(--terra);
+	color: #fff;
+	border: none;
+	border-radius: var(--radius);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+.btn-rate:disabled { opacity: 0.6; cursor: default; }
+
+.rate-msg { font-size: 0.85rem; margin-top: 0.5rem; color: var(--muted); }
+
+.flag-details { margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted); }
+</style>
