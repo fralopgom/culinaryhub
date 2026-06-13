@@ -68,9 +68,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (!Array.isArray(instructions) || !instructions.filter((s: string) => s?.trim()).length) {
 			error(400, 'instructions_required');
 		}
-		if (!walletCanPublish(user.wallet_tier)) error(403, 'wallet_tier_insufficient');
-		if (await dailyLimitReached(user.id, user.wallet_tier, user.prestige_score)) {
-			error(429, 'daily_limit_reached');
+		if (!user.is_admin) {
+			if (!walletCanPublish(user.wallet_tier)) error(403, 'wallet_tier_insufficient');
+			if (await dailyLimitReached(user.id, user.wallet_tier, user.prestige_score)) {
+				error(429, 'daily_limit_reached');
+			}
 		}
 	}
 
