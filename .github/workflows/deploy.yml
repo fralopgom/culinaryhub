@@ -86,7 +86,7 @@ jobs:
       - name: Health check
         run: |
           for i in $(seq 1 18); do
-            curl -sf http://localhost:${{ env.HOST_PORT }} && exit 0
+            docker exec ${{ env.CONTAINER }} wget -qO /dev/null http://localhost:${{ env.CTR_PORT }} 2>/dev/null && exit 0
             echo "Attempt $i/18 failed, retrying in 5s..."
             sleep 5
           done
