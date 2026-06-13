@@ -29,25 +29,33 @@
 	let license       = $state(false);
 
 	async function analyze() {
-		if (!rawText.trim()) { errorMsg = $t('wizard_error_empty'); return; }
+		errorMsg = '';
+		if (!rawText.trim()) {
+			errorMsg = data.lang === 'en' ? 'Write something to continue' : 'Escribe algo para continuar';
+			return;
+		}
 		analyzing = true;
-		errorMsg  = '';
-		const res = await fetch('/api/recipes/extract', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ text: rawText })
-		});
-		if (res.ok) {
+		try {
+			const res = await fetch('/api/recipes/extract', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ text: rawText })
+			});
+			if (!res.ok) {
+				errorMsg = `Error ${res.status}`;
+				return;
+			}
 			const d = await res.json();
 			editTitle       = d.title       || '';
 			editDescription = d.description || '';
 			editIngredients = d.ingredients?.length ? d.ingredients : [''];
 			editSteps       = d.steps?.length       ? d.steps       : [''];
 			step = 'review';
-		} else {
-			errorMsg = $t('error_server');
+		} catch (e) {
+			errorMsg = String(e);
+		} finally {
+			analyzing = false;
 		}
-		analyzing = false;
 	}
 
 	function addIngredient() { editIngredients = [...editIngredients, '']; }
@@ -112,7 +120,6 @@
 		bind:value={rawText}
 		placeholder={$t('wizard_paste_placeholder')}
 		rows="14"
-		autofocus
 	></textarea>
 
 	{#if errorMsg}<p class="msg-err">{errorMsg}</p>{/if}
