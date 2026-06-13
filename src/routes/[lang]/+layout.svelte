@@ -123,7 +123,10 @@ nav {
 	white-space: nowrap;
 	transition: color 0.35s;
 }
-header.transparent .brand-name { color: #fff; }
+header.transparent .brand-name {
+	color: #fff;
+	text-shadow: 0 1px 4px rgba(0,0,0,0.7), 0 0 12px rgba(0,0,0,0.4);
+}
 
 .links {
 	display: flex;
@@ -152,7 +155,10 @@ header.transparent .brand-name { color: #fff; }
 .links :global(button:hover) { background: var(--accent-light); color: var(--accent); text-decoration: none; }
 
 header.transparent .links a,
-header.transparent .links :global(button) { color: rgba(255,255,255,0.9); }
+header.transparent .links :global(button) {
+	color: rgba(255,255,255,0.9);
+	text-shadow: 0 1px 4px rgba(0,0,0,0.7), 0 0 12px rgba(0,0,0,0.4);
+}
 header.transparent .links a:hover,
 header.transparent .links :global(button:hover) { background: rgba(255,255,255,0.15); color: #fff; }
 
