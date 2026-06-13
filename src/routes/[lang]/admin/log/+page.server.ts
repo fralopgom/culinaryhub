@@ -9,7 +9,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const actions = await db`
 		SELECT a.action, a.reason, a.target_id, a.created_at,
-		       u.username AS admin_username, u.ethereum_address AS admin_address
+		       u.username AS admin_username, u.address AS admin_address
 		FROM admin_actions a
 		JOIN users u ON a.admin_id = u.id
 		ORDER BY a.created_at DESC
