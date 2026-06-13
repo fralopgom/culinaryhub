@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		LEFT JOIN cultures c ON r.culture_id = c.id
 		LEFT JOIN ratings rt ON rt.recipe_id = r.id
 		WHERE r.slug = ${params.slug} AND r.status != 'hidden'
-		GROUP BY r.id, u.username, u.address, u.prestige_score, c.${db(nameCol)}, c.slug
+		GROUP BY r.id, u.username, u.display_name, u.address, u.prestige_score, c.${db(nameCol)}, c.slug
 	`;
 	if (!recipe) error(404);
 
