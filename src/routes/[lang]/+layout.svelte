@@ -10,10 +10,11 @@
 
 	const altLang       = $derived(data.lang === 'es' ? 'en' : 'es');
 	const profileHandle = $derived(data.user?.address ?? data.user?.username ?? '');
-	const isHome        = $derived(
+	const isHome      = $derived(
 		$page.url.pathname === `/${data.lang}` ||
 		$page.url.pathname === `/${data.lang}/`
 	);
+	const isWizard    = $derived($page.url.pathname.endsWith('/recipes/new'));
 
 	let menuOpen = $state(false);
 	let scrolled = $state(false);
@@ -67,7 +68,7 @@
 	</nav>
 </header>
 
-<main class:home={isHome}>
+<main class:home={isHome} class:full-bleed={isWizard}>
 	{@render children()}
 </main>
 
@@ -231,6 +232,7 @@ header.transparent .burger span { background: #fff; }
 	.lang-switch { margin-left: 0; }
 }
 
-/* main has no top padding when home (hero handles it) */
-:global(main.home) { padding-top: 0; padding-bottom: 0; max-width: 100%; }
+/* hero and wizard pages take full width */
+:global(main.home),
+:global(main.full-bleed) { padding: 0; max-width: 100%; }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
+	import { FORM_PHOTOS } from '$lib/utils/unsplash';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -21,10 +22,7 @@
 	let license         = $state(false);
 	let submitting      = $state(false);
 	let error_msg       = $state('');
-	let overlap_count   = $state(0);
-
-	// honeypot — must stay empty
-	let website = $state('');
+	let website         = $state(''); // honeypot
 
 	function addStep() { instructions = [...instructions, '']; }
 	function removeStep(i: number) { instructions = instructions.filter((_, idx) => idx !== i); }
@@ -33,11 +31,9 @@
 		if (!id || selectedIngreds.find(i => i.ingredient_id === id)) return;
 		selectedIngreds = [...selectedIngreds, { ingredient_id: id, quantity: '', unit: '', notes_es: '', notes_en: '' }];
 	}
-
 	function removeIngredient(id: string) {
 		selectedIngreds = selectedIngreds.filter(i => i.ingredient_id !== id);
 	}
-
 	function ingredientName(id: string) {
 		return data.ingredients.find((i: { id: string; name: string }) => i.id === id)?.name ?? id;
 	}
@@ -46,12 +42,11 @@
 		if (!title.trim() || !license) return;
 		submitting = true;
 		error_msg = '';
-
 		const res = await fetch('/api/recipes', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				website,  // honeypot
+				website,
 				title, description,
 				instructions: instructions.filter(s => s.trim()),
 				culture_id: culture_id || null,
@@ -65,14 +60,9 @@
 				license_accepted: license
 			})
 		});
-
 		const body = await res.json();
-		if (res.ok) {
-			if (body.overlap_count > 0) overlap_count = body.overlap_count;
-			goto(`/${data.lang}/recipes/${body.recipe.slug}`);
-		} else {
-			error_msg = body.message ?? $t('error_server');
-		}
+		if (res.ok) goto(`/${data.lang}/recipes/${body.recipe.slug}`);
+		else error_msg = body.message ?? $t('error_server');
 		submitting = false;
 	}
 </script>
@@ -81,133 +71,361 @@
 	<title>{$t('publish_title')} — {$t('meta_site_name')}</title>
 </svelte:head>
 
-<h1>{$t('publish_title')}</h1>
+<!-- honeypot -->
+<input name="website" bind:value={website} style="display:none" tabindex="-1" autocomplete="off" />
 
-<form onsubmit={(e) => { e.preventDefault(); submit(); }}>
-	<!-- honeypot: invisible for humans -->
-	<input name="website" bind:value={website} style="display:none" tabindex="-1" autocomplete="off" />
+<div class="wizard">
 
-	<label>
-		<input type="text" bind:value={title} required placeholder="…" />
-	</label>
+	<!-- Sidebar image — desktop only -->
+	<aside class="sidebar">
+		<div class="sidebar-img-wrap">
+			<img src={FORM_PHOTOS.soul} alt="" aria-hidden="true" loading="lazy" />
+			<div class="sidebar-overlay">
+				<blockquote>
+					"Cada receta es una carta de amor<br>a quienes vendrán después."
+				</blockquote>
+			</div>
+		</div>
+	</aside>
 
-	<label>
-		<textarea bind:value={description} rows="3"></textarea>
-	</label>
+	<!-- Form -->
+	<form class="form-body" onsubmit={(e) => { e.preventDefault(); submit(); }}>
 
-	<select bind:value={culture_id}>
-		<option value="">{$t('recipe_culture')}</option>
-		{#each data.cultures as c}
-			<option value={c.id}>{'—'.repeat(c.level)} {c.name}</option>
-		{/each}
-	</select>
+		<header class="form-header">
+			<p class="form-eyebrow">✦ Nueva receta</p>
+			<h1>{$t('publish_title')}</h1>
+			<p class="form-intro">Tómate tu tiempo. Esta receta merece ser contada bien.</p>
+		</header>
 
-	<section>
-		<h2>{$t('recipe_ingredients')}</h2>
-		<select onchange={(e) => { addIngredient((e.target as HTMLSelectElement).value); (e.target as HTMLSelectElement).value = ''; }}>
-			<option value="">+ {$t('recipe_ingredients')}</option>
-			{#each data.ingredients as ing}
-				<option value={ing.id}>{ing.name}</option>
-			{/each}
-		</select>
-		{#each selectedIngreds as ing, i}
+		<!-- ── SECCIÓN 1: EL ALMA ── -->
+		<div class="section-divider">El alma del plato</div>
+
+		<div class="field">
+			<label for="title">¿Cómo se llama?</label>
+			<input id="title" type="text" bind:value={title} required
+				placeholder="El nombre que le pone tu familia…" />
+		</div>
+
+		<div class="field">
+			<label for="desc">Su historia</label>
+			<textarea id="desc" bind:value={description} rows="4"
+				placeholder="De dónde viene este plato, quién te lo enseñó, qué recuerdos trae a la mesa…"></textarea>
+		</div>
+
+		<div class="field">
+			<label for="culture">Tradición culinaria</label>
+			<select id="culture" bind:value={culture_id}>
+				<option value="">Sin asignar</option>
+				{#each data.cultures as c}
+					<option value={c.id}>{'—'.repeat(c.level)} {c.name}</option>
+				{/each}
+			</select>
+		</div>
+
+		<div class="field">
+			<label for="tags">¿Cómo la describirías a un amigo?</label>
+			<input id="tags" type="text" bind:value={tags}
+				placeholder="tradición, domingo, abuela, mariscos, sin gluten…" />
+			<p class="field-hint">Separadas por comas.</p>
+		</div>
+
+		<!-- ── SECCIÓN 2: INGREDIENTES ── -->
+		<div class="section-divider">Los ingredientes</div>
+
+		<p class="section-intro-text">
+			Añádelos como si se los dictaras a un amigo que nunca ha cocinado este plato.
+		</p>
+
+		<div class="field">
+			<label for="ing-picker">Añadir ingrediente</label>
+			<select id="ing-picker"
+				onchange={(e) => {
+					addIngredient((e.target as HTMLSelectElement).value);
+					(e.target as HTMLSelectElement).value = '';
+				}}>
+				<option value="">Busca un ingrediente…</option>
+				{#each data.ingredients as ing}
+					<option value={ing.id}>{ing.name}</option>
+				{/each}
+			</select>
+		</div>
+
+		{#if selectedIngreds.length}
+		<div class="ingredient-list">
+			{#each selectedIngreds as ing}
 			<div class="ing-row">
-				<span>{ingredientName(ing.ingredient_id)}</span>
-				<input type="text" bind:value={ing.quantity} placeholder="qty" />
-				<input type="text" bind:value={ing.unit}     placeholder="unit" />
-				<button type="button" onclick={() => removeIngredient(ing.ingredient_id)}>✕</button>
+				<span class="ing-name">{ingredientName(ing.ingredient_id)}</span>
+				<input type="text" bind:value={ing.quantity} placeholder="Cantidad" class="ing-qty" />
+				<input type="text" bind:value={ing.unit}     placeholder="Unidad"   class="ing-unit" />
+				<button type="button" class="btn btn-ghost ing-remove"
+					onclick={() => removeIngredient(ing.ingredient_id)}
+					aria-label="Eliminar">×</button>
 			</div>
-		{/each}
-	</section>
+			{/each}
+		</div>
+		{/if}
 
-	<section>
-		<h2>{$t('recipe_instructions')}</h2>
-		{#each instructions as step, i}
+		<!-- ── SECCIÓN 3: PREPARACIÓN ── -->
+		<div class="section-divider">La preparación</div>
+
+		<p class="section-intro-text">
+			Cuéntanos cómo se hace, paso a paso, con la calma de quien lo ha hecho mil veces.
+		</p>
+
+		<div class="steps-list">
+			{#each instructions as step, i}
 			<div class="step-row">
-				<textarea bind:value={instructions[i]} rows="2"></textarea>
-				{#if instructions.length > 1}
-					<button type="button" onclick={() => removeStep(i)}>✕</button>
-				{/if}
+				<span class="step-num">{i + 1}</span>
+				<div class="step-field">
+					<textarea bind:value={instructions[i]} rows="2"
+						placeholder="Describe este paso…"></textarea>
+					{#if instructions.length > 1}
+					<button type="button" class="btn btn-ghost step-remove"
+						onclick={() => removeStep(i)} aria-label="Eliminar paso">×</button>
+					{/if}
+				</div>
 			</div>
-		{/each}
-		<button type="button" onclick={addStep}>+ paso</button>
-	</section>
+			{/each}
+		</div>
 
-	<input type="text" bind:value={tags} placeholder="tag1, tag2" />
+		<button type="button" class="btn add-step-btn" onclick={addStep}>
+			+ Añadir un paso más
+		</button>
 
-	<div class="row">
-		<input type="number" bind:value={prep_time_min} min="0" placeholder="prep min" />
-		<input type="number" bind:value={cook_time_min} min="0" placeholder="cook min" />
-		<input type="number" bind:value={servings}      min="1" placeholder="servings" />
-	</div>
+		<!-- ── SECCIÓN 4: DETALLES ── -->
+		<div class="section-divider">Los detalles</div>
 
-	<select bind:value={difficulty}>
-		<option value="">—</option>
-		<option value="easy">{$t('recipe_difficulty_easy')}</option>
-		<option value="medium">{$t('recipe_difficulty_medium')}</option>
-		<option value="hard">{$t('recipe_difficulty_hard')}</option>
-	</select>
+		<div class="details-grid">
+			<div class="field">
+				<label for="prep">Preparación <span class="unit-hint">(minutos)</span></label>
+				<input id="prep" type="number" bind:value={prep_time_min} min="0" placeholder="30" />
+			</div>
+			<div class="field">
+				<label for="cook">Cocción <span class="unit-hint">(minutos)</span></label>
+				<input id="cook" type="number" bind:value={cook_time_min} min="0" placeholder="45" />
+			</div>
+			<div class="field">
+				<label for="servings">Raciones</label>
+				<input id="servings" type="number" bind:value={servings} min="1" placeholder="4" />
+			</div>
+		</div>
 
-	<select bind:value={ai_level}>
-		<option value="none">{$t('recipe_ai_none')}</option>
-		<option value="assisted">{$t('recipe_ai_assisted')}</option>
-		<option value="generated">{$t('recipe_ai_generated')}</option>
-		<option value="mixed">{$t('recipe_ai_mixed')}</option>
-	</select>
+		<div class="details-row">
+			<div class="field">
+				<label for="diff">¿Cuánta paciencia requiere?</label>
+				<select id="diff" bind:value={difficulty}>
+					<option value="">Sin especificar</option>
+					<option value="easy">{$t('recipe_difficulty_easy')}</option>
+					<option value="medium">{$t('recipe_difficulty_medium')}</option>
+					<option value="hard">{$t('recipe_difficulty_hard')}</option>
+				</select>
+			</div>
+			<div class="field">
+				<label for="ai">¿Te ha ayudado la inteligencia artificial?</label>
+				<select id="ai" bind:value={ai_level}>
+					<option value="none">No, es completamente mía</option>
+					<option value="assisted">Me ayudó a redactar o traducir</option>
+					<option value="generated">La generó una IA, yo la he validado</option>
+					<option value="mixed">Una mezcla de las dos</option>
+				</select>
+			</div>
+		</div>
 
-	<label class="checkbox-row">
-		<input type="checkbox" bind:checked={license} required />
-		{$t('recipe_license_accept')}
-	</label>
+		<!-- ── FIRMA ── -->
+		<div class="section-divider">Tu firma</div>
 
-	{#if overlap_count > 0}<p class="warning">{$t('recipe_overlap_warning', { values: { count: overlap_count } })}</p>{/if}
-	{#if error_msg}<p class="error">{error_msg}</p>{/if}
+		<label class="checkbox-label field">
+			<input type="checkbox" bind:checked={license} required />
+			<span>
+				Esta receta es un legado abierto. La comparto bajo licencia
+				<strong>CC BY-SA 4.0</strong> para que otros puedan preservarla y construir sobre ella.
+			</span>
+		</label>
 
-	<button type="submit" data-primary disabled={submitting || !license}>
-		{submitting ? '…' : $t('publish_submit')}
-	</button>
-</form>
+		{#if error_msg}
+			<p class="msg-err field">{error_msg}</p>
+		{/if}
+
+		<div class="submit-row">
+			<button type="submit" class="btn btn-primary submit-btn"
+				disabled={submitting || !license || !title.trim()}>
+				{submitting ? 'Guardando…' : 'Guardar esta receta'}
+			</button>
+			<a href="/{data.lang}" class="btn btn-ghost">Cancelar</a>
+		</div>
+
+	</form>
+</div>
 
 <style>
-h1 { margin-bottom: 1.5rem; }
-
-form {
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-	max-width: 680px;
+/* LAYOUT */
+.wizard {
+	display: grid;
+	grid-template-columns: 340px 1fr;
+	min-height: calc(100dvh - var(--nav-h));
+	gap: 0;
 }
 
-form section {
+/* SIDEBAR */
+.sidebar {
+	position: sticky;
+	top: var(--nav-h);
+	height: calc(100dvh - var(--nav-h));
+	overflow: hidden;
+}
+.sidebar-img-wrap { position: relative; width: 100%; height: 100%; }
+.sidebar-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.sidebar-overlay {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to top, rgba(20,12,5,0.8) 0%, rgba(20,12,5,0.15) 60%);
+	display: flex;
+	align-items: flex-end;
+	padding: 2.5rem;
+}
+blockquote {
+	font-family: var(--font-serif);
+	font-style: italic;
+	font-size: 1.05rem;
+	color: rgba(255,255,255,0.88);
+	line-height: 1.65;
+	border: none;
+}
+
+/* FORM */
+.form-body {
+	padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 4rem);
+	max-width: 680px;
 	display: flex;
 	flex-direction: column;
-	gap: 0.5rem;
-	padding: 1rem;
+}
+
+.form-header { margin-bottom: 3rem; }
+.form-eyebrow {
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--terra);
+	margin-bottom: 0.6rem;
+}
+.form-header h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-bottom: 0.5rem; }
+.form-intro { color: var(--muted); font-size: 0.95rem; margin: 0; }
+
+.section-intro-text {
+	color: var(--muted);
+	font-size: 0.9rem;
+	font-style: italic;
+	margin-bottom: 1.5rem;
+	margin-top: -0.5rem;
+}
+
+/* INGREDIENTS */
+.ingredient-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin-bottom: 1rem;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
+	overflow: hidden;
 	background: var(--surface);
 }
+.ing-row {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.65rem 1rem;
+	border-bottom: 1px solid var(--border);
+}
+.ing-row:last-child { border-bottom: none; }
+.ing-name { flex: 1; font-size: 0.9rem; color: var(--text); min-width: 0; }
+.ing-qty, .ing-unit { width: 70px; font-size: 0.875rem; border-bottom: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.3rem 0.5rem; background: var(--cream); }
+.ing-qty:focus, .ing-unit:focus { border-color: var(--terra); box-shadow: none; }
+.ing-remove { padding: 0.25rem 0.5rem; font-size: 1.1rem; color: var(--subtle) !important; }
+.ing-remove:hover { color: var(--terra) !important; }
 
-form section h2 { margin: 0 0 0.25rem; font-size: 1rem; }
+/* STEPS */
+.steps-list { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1rem; }
+.step-row { display: flex; gap: 1rem; align-items: flex-start; }
+.step-num {
+	width: 1.75rem;
+	height: 1.75rem;
+	flex-shrink: 0;
+	border-radius: 50%;
+	border: 1.5px solid var(--border);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: var(--muted);
+	margin-top: 0.5rem;
+}
+.step-field { flex: 1; position: relative; }
+.step-field textarea { padding-bottom: 0; }
+.step-remove {
+	position: absolute;
+	top: 0.25rem;
+	right: 0;
+	padding: 0.2rem 0.4rem;
+	font-size: 1rem;
+	color: var(--subtle) !important;
+}
+.step-remove:hover { color: var(--terra) !important; }
 
-.row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.row input { flex: 1; min-width: 80px; }
+.add-step-btn {
+	align-self: flex-start;
+	border-style: dashed;
+	color: var(--muted);
+	font-size: 0.875rem;
+	padding: 0.5rem 1rem;
+	margin-bottom: 0.5rem;
+}
+.add-step-btn:hover { border-color: var(--terra); color: var(--terra); background: var(--terra-light); }
 
-.ing-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.ing-row span { flex: 1; min-width: 100px; font-size: 0.875rem; }
-.ing-row input { width: 70px; }
-.ing-row button { padding: 0.35rem 0.6rem; color: var(--muted); }
+/* DETAILS */
+.details-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1.5rem;
+}
+.details-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.5rem;
+	margin-top: 0.5rem;
+}
 
-.step-row { display: flex; gap: 0.5rem; align-items: flex-start; }
-.step-row textarea { flex: 1; }
-.step-row button { margin-top: 0.25rem; padding: 0.35rem 0.6rem; color: var(--muted); }
+.unit-hint { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.7rem; }
 
-label.checkbox-row { flex-direction: row; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); }
+/* SUBMIT */
+.submit-row {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+	margin-top: 1rem;
+	flex-wrap: wrap;
+}
+.submit-btn {
+	padding: 0.85rem 2.5rem;
+	font-size: 1rem;
+	letter-spacing: 0.02em;
+	box-shadow: 0 4px 16px rgba(184,92,56,0.3);
+}
+.submit-btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(184,92,56,0.4); }
 
-.error { color: #c0392b; font-size: 0.875rem; }
-.warning { color: #c2652a; font-size: 0.875rem; }
-
-@media (max-width: 500px) {
-	.row { flex-direction: column; }
+/* RESPONSIVE */
+@media (max-width: 900px) {
+	.wizard { grid-template-columns: 1fr; }
+	.sidebar { display: none; }
+	.form-body { max-width: 100%; padding: 2rem var(--pad); }
+}
+@media (max-width: 560px) {
+	.details-grid { grid-template-columns: 1fr 1fr; }
+	.details-row  { grid-template-columns: 1fr; }
+}
+@media (max-width: 400px) {
+	.details-grid { grid-template-columns: 1fr; }
 }
 </style>

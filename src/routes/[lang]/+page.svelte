@@ -1,10 +1,30 @@
 <script lang="ts">
 	import { t } from 'svelte-i18n';
 	import RecipeCard from '$lib/components/RecipeCard.svelte';
-	import { HERO_PHOTO } from '$lib/utils/unsplash';
+	import { HERO_PHOTO, recipePhoto } from '$lib/utils/unsplash';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Atmospheric culture cards even without recipes
+	const CULTURE_PHOTOS = [
+		'1504674900247-0877df9cc836',
+		'1455619452474-a2175cc2d3e1',
+		'1543339308-43e59d6b73a6',
+		'1547592180-85f173990554',
+		'1498654896293-37aaa4cdbf28',
+		'1484723091739-30b0bd76b342',
+	];
+	function culturePhoto(i: number) {
+		const id = CULTURE_PHOTOS[i % CULTURE_PHOTOS.length];
+		return `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=600&h=400&q=75`;
+	}
+
+	const topCultures = $derived(
+		(data.cultures as any[] ?? [])
+			.filter((c: any) => c.level === 0)
+			.slice(0, 6)
+	);
 </script>
 
 <svelte:head>
@@ -16,34 +36,32 @@
 	<meta property="og:type"        content="website" />
 </svelte:head>
 
-<!-- HERO -->
-<section class="hero" style="background-image: url('{HERO_PHOTO}')">
+<!-- ░░ HERO ░░ -->
+<section class="hero" style="--hero-img: url('{HERO_PHOTO}')">
 	<div class="hero-overlay"></div>
 	<div class="hero-content">
-		<p class="hero-eyebrow">{$t('footer_suite')}</p>
+		<p class="eyebrow">✦ {$t('footer_suite')}</p>
 		<h1>{$t('home_hero_title')}</h1>
 		<p class="hero-sub">{$t('home_hero_subtitle')}</p>
-		<div class="hero-actions">
-			<a href="/{data.lang}/recipes" class="btn-hero-primary">{$t('home_cta_browse')}</a>
+		<div class="hero-ctas">
+			<a href="/{data.lang}/recipes" class="cta-primary">{$t('home_cta_browse')}</a>
 			{#if data.user}
-				<a href="/{data.lang}/recipes/new" class="btn-hero-secondary">{$t('home_cta_publish')}</a>
+				<a href="/{data.lang}/recipes/new" class="cta-ghost">{$t('home_cta_publish')}</a>
 			{:else}
-				<a href="/api/auth/google?lang={data.lang}" class="btn-hero-secondary">{$t('auth_login_google')}</a>
+				<a href="/api/auth/google?lang={data.lang}" class="cta-ghost">{$t('auth_login_google')}</a>
 			{/if}
 		</div>
 	</div>
-	<div class="hero-scroll-hint" aria-hidden="true">
-		<span>↓</span>
-	</div>
+	<span class="scroll-hint" aria-hidden="true">↓</span>
 </section>
 
-<!-- RECENT RECIPES -->
-{#if data.recipes.length}
-<section class="recipes-section">
-	<div class="section-inner">
-		<div class="section-header">
+<!-- ░░ RECENT RECIPES ░░ -->
+{#if data.recipes?.length}
+<section class="page-section">
+	<div class="section-wrap">
+		<div class="section-head">
 			<h2>{$t('nav_recipes')}</h2>
-			<a href="/{data.lang}/recipes" class="see-all">{$t('home_cta_browse')} →</a>
+			<a href="/{data.lang}/recipes" class="see-all">Ver todas →</a>
 		</div>
 		<div class="grid">
 			{#each data.recipes as recipe}
@@ -54,25 +72,45 @@
 </section>
 {/if}
 
-<!-- VALUE PROPS -->
-<section class="pillars">
-	<div class="section-inner">
-		<div class="pillar-grid">
-			<div class="pillar">
-				<span class="pillar-icon">📖</span>
-				<h3>Preserva</h3>
-				<p>Guarda recetas familiares antes de que se pierdan para siempre.</p>
-			</div>
-			<div class="pillar">
-				<span class="pillar-icon">🌍</span>
-				<h3>Comparte</h3>
-				<p>Conecta con personas que comparten tu herencia culinaria.</p>
-			</div>
-			<div class="pillar">
-				<span class="pillar-icon">✍️</span>
-				<h3>Certifica</h3>
-				<p>Sella la autoría de tu receta con tecnología Sygnet.</p>
-			</div>
+<!-- ░░ CULTURES MOSAIC — always visible ░░ -->
+{#if topCultures.length}
+<section class="page-section cultures-section">
+	<div class="section-wrap">
+		<div class="section-head">
+			<h2>{$t('nav_cultures')}</h2>
+			<a href="/{data.lang}/cultures" class="see-all">Explorar →</a>
+		</div>
+		<div class="culture-mosaic">
+			{#each topCultures as culture, i}
+				<a href="/{data.lang}/cultures/{culture.slug}" class="culture-card">
+					<img src={culturePhoto(i)} alt={culture.name} loading="lazy" />
+					<div class="culture-overlay">
+						<span>{culture.name}</span>
+					</div>
+				</a>
+			{/each}
+		</div>
+	</div>
+</section>
+{/if}
+
+<!-- ░░ VALUE PROPS ░░ -->
+<section class="page-section pillars-section">
+	<div class="section-wrap pillars">
+		<div class="pillar">
+			<span class="pillar-icon">📖</span>
+			<h3>Preserva</h3>
+			<p>Cada receta es un trozo de historia. Guárdala antes de que se pierda.</p>
+		</div>
+		<div class="pillar">
+			<span class="pillar-icon">🌍</span>
+			<h3>Comparte</h3>
+			<p>Conecta con personas que cuidan la misma herencia culinaria que tú.</p>
+		</div>
+		<div class="pillar">
+			<span class="pillar-icon">✦</span>
+			<h3>Certifica</h3>
+			<p>Sella la autoría de tu receta. Que quede constancia de quién la guardó.</p>
 		</div>
 	</div>
 </section>
@@ -82,6 +120,7 @@
 .hero {
 	position: relative;
 	min-height: calc(100dvh - var(--nav-h));
+	background-image: var(--hero-img);
 	background-size: cover;
 	background-position: center;
 	display: flex;
@@ -90,153 +129,161 @@
 	justify-content: center;
 	text-align: center;
 	color: #fff;
-	overflow: hidden;
 }
 
 .hero-overlay {
 	position: absolute;
 	inset: 0;
 	background: linear-gradient(
-		160deg,
-		rgba(15, 10, 5, 0.55) 0%,
-		rgba(20, 12, 5, 0.70) 60%,
-		rgba(10, 5, 0, 0.82) 100%
+		170deg,
+		rgba(44, 30, 18, 0.45) 0%,
+		rgba(30, 18, 10, 0.72) 100%
 	);
 }
 
 .hero-content {
 	position: relative;
 	z-index: 1;
-	max-width: 720px;
-	padding: var(--pad);
+	max-width: 680px;
+	padding: 2rem var(--pad);
 }
 
-.hero-eyebrow {
-	font-size: 0.75rem;
-	font-weight: 600;
-	letter-spacing: 0.15em;
-	text-transform: uppercase;
-	color: rgba(255,255,255,0.6);
-	margin-bottom: 1rem;
-	margin-top: 0;
-}
-
-.hero-content h1 {
-	font-size: clamp(2.2rem, 6vw, 3.8rem);
+.eyebrow {
+	font-size: 0.7rem;
 	font-weight: 700;
-	line-height: 1.15;
-	text-shadow: 0 2px 20px rgba(0,0,0,0.4);
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: rgba(255,255,255,0.55);
 	margin-bottom: 1.25rem;
 }
 
+.hero-content h1 {
+	font-size: clamp(2.4rem, 6vw, 4rem);
+	color: #fff;
+	text-shadow: 0 2px 24px rgba(0,0,0,0.35);
+	margin-bottom: 1rem;
+}
+
 .hero-sub {
-	font-size: clamp(1rem, 2.5vw, 1.2rem);
-	color: rgba(255,255,255,0.82);
-	line-height: 1.6;
-	margin-bottom: 2.25rem;
-	margin-top: 0;
+	font-size: clamp(1rem, 2.2vw, 1.15rem);
+	color: rgba(255,255,255,0.78);
+	line-height: 1.65;
+	margin-bottom: 2.5rem;
 }
 
-.hero-actions {
-	display: flex;
-	gap: 1rem;
-	justify-content: center;
-	flex-wrap: wrap;
-}
+.hero-ctas { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 
-.btn-hero-primary {
-	display: inline-block;
+.cta-primary {
 	padding: 0.8rem 2rem;
-	background: var(--accent);
+	background: var(--terra);
 	color: #fff;
 	border-radius: var(--radius);
 	font-weight: 600;
-	font-size: 1rem;
-	text-decoration: none;
+	font-size: 0.95rem;
+	box-shadow: 0 4px 20px rgba(184, 92, 56, 0.5);
 	transition: background 0.2s, transform 0.15s;
-	box-shadow: 0 4px 16px rgba(194, 101, 42, 0.45);
+	text-decoration: none;
 }
-.btn-hero-primary:hover { background: var(--accent-dark); transform: translateY(-2px); text-decoration: none; color: #fff; }
+.cta-primary:hover { background: var(--accent-dark); transform: translateY(-2px); color: #fff; text-decoration: none; }
 
-.btn-hero-secondary {
-	display: inline-block;
+.cta-ghost {
 	padding: 0.8rem 2rem;
-	background: rgba(255,255,255,0.12);
-	color: #fff;
-	border: 1.5px solid rgba(255,255,255,0.4);
+	background: rgba(255,255,255,0.1);
+	border: 1.5px solid rgba(255,255,255,0.35);
+	color: rgba(255,255,255,0.9);
 	border-radius: var(--radius);
 	font-weight: 500;
-	font-size: 1rem;
-	text-decoration: none;
-	backdrop-filter: blur(4px);
+	font-size: 0.95rem;
+	backdrop-filter: blur(6px);
 	transition: background 0.2s, transform 0.15s;
+	text-decoration: none;
 }
-.btn-hero-secondary:hover { background: rgba(255,255,255,0.22); transform: translateY(-2px); text-decoration: none; color: #fff; }
+.cta-ghost:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); color: #fff; text-decoration: none; }
 
-.hero-scroll-hint {
+.scroll-hint {
 	position: absolute;
 	bottom: 2rem;
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 1;
-	color: rgba(255,255,255,0.45);
-	font-size: 1.3rem;
-	animation: bounce 2s infinite;
+	color: rgba(255,255,255,0.4);
+	font-size: 1.2rem;
+	animation: bob 2.2s ease-in-out infinite;
 }
-@keyframes bounce {
-	0%, 100% { transform: translateX(-50%) translateY(0); }
-	50%       { transform: translateX(-50%) translateY(6px); }
-}
+@keyframes bob { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(7px)} }
 
 /* SECTIONS */
-.recipes-section,
-.pillars {
-	padding: clamp(3rem, 6vw, 5rem) var(--pad);
-}
+.page-section { padding: clamp(3rem, 7vw, 6rem) var(--pad); }
+.pillars-section { background: var(--surface); }
+.cultures-section { background: var(--cream); }
+.section-wrap { max-width: var(--max-w); margin: 0 auto; }
 
-.pillars { background: var(--surface); }
-
-.section-inner { max-width: var(--max-w); margin: 0 auto; }
-
-.section-header {
+.section-head {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
-	margin-bottom: 1.75rem;
+	margin-bottom: 2rem;
 	gap: 1rem;
 }
-.section-header h2 { margin: 0; }
-
-.see-all {
-	font-size: 0.875rem;
-	font-weight: 500;
-	color: var(--accent);
-	white-space: nowrap;
-}
+.section-head h2 { margin: 0; }
+.see-all { font-size: 0.85rem; font-weight: 500; color: var(--terra); white-space: nowrap; }
 .see-all:hover { color: var(--accent-dark); }
 
+/* CULTURE MOSAIC */
+.culture-mosaic {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 1rem;
+}
+@media (min-width: 640px)  { .culture-mosaic { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 900px)  { .culture-mosaic { grid-template-columns: repeat(6, 1fr); } }
+
+.culture-card {
+	position: relative;
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	aspect-ratio: 4/3;
+	display: block;
+	text-decoration: none;
+}
+.culture-card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.5s ease;
+}
+.culture-card:hover img { transform: scale(1.06); }
+
+.culture-overlay {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to top, rgba(20,12,5,0.72) 0%, transparent 55%);
+	display: flex;
+	align-items: flex-end;
+	padding: 0.75rem;
+}
+.culture-overlay span {
+	color: #fff;
+	font-family: var(--font-serif);
+	font-size: 0.9rem;
+	font-weight: 600;
+	line-height: 1.2;
+	text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
 /* VALUE PROPS */
-.pillar-grid {
+.pillars {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 2rem;
-	margin-top: 0.5rem;
+	gap: 3rem;
 }
+.pillar { text-align: center; }
+.pillar-icon { font-size: 2rem; display: block; margin-bottom: 1rem; }
+.pillar h3 { margin-bottom: 0.5rem; }
+.pillar p { color: var(--muted); font-size: 0.9rem; line-height: 1.65; margin: 0; }
 
-.pillar {
-	text-align: center;
-	padding: 2rem 1.5rem;
-	border-radius: var(--radius-lg);
-	background: var(--cream);
-	border: 1px solid var(--border);
-}
-
-.pillar-icon { font-size: 2.2rem; display: block; margin-bottom: 0.75rem; }
-.pillar h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
-.pillar p { color: var(--muted); font-size: 0.9rem; margin: 0; line-height: 1.55; }
-
-@media (max-width: 560px) {
-	.hero-actions { flex-direction: column; align-items: center; }
-	.btn-hero-primary, .btn-hero-secondary { width: 100%; max-width: 280px; text-align: center; }
+@media (max-width: 480px) {
+	.hero-ctas { flex-direction: column; align-items: center; }
+	.cta-primary, .cta-ghost { width: 100%; max-width: 260px; text-align: center; }
 }
 </style>
