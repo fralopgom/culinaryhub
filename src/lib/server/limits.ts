@@ -2,13 +2,18 @@ import { env } from '$env/dynamic/private';
 import db from './db';
 
 // Configurable via env — alpha uses relaxed values
-const DAILY_LIMIT_TIER1 = parseInt(env.DAILY_LIMIT_TIER1 ?? '1');
-const DAILY_LIMIT_TIER2 = parseInt(env.DAILY_LIMIT_TIER2 ?? '3');
-const DAILY_LIMIT_HIGH  = parseInt(env.DAILY_LIMIT_HIGH  ?? '10');
-const MIN_WALLET_TIER   = parseInt(env.MIN_WALLET_TIER   ?? '0');
+const DAILY_LIMIT_TIER1       = parseInt(env.DAILY_LIMIT_TIER1       ?? '1');
+const DAILY_LIMIT_TIER2       = parseInt(env.DAILY_LIMIT_TIER2       ?? '3');
+const DAILY_LIMIT_HIGH        = parseInt(env.DAILY_LIMIT_HIGH        ?? '10');
+const MIN_WALLET_TIER         = parseInt(env.MIN_WALLET_TIER         ?? '0');
+const MIN_PRESTIGE_TO_PUBLISH = parseInt(env.MIN_PRESTIGE_TO_PUBLISH ?? '10');
 
 export function walletCanPublish(walletTier: number): boolean {
 	return walletTier >= MIN_WALLET_TIER;
+}
+
+export function prestigeCanPublish(prestigeScore: number): boolean {
+	return prestigeScore >= MIN_PRESTIGE_TO_PUBLISH;
 }
 
 export async function dailyLimitReached(userId: string, walletTier: number, prestigeScore: number): Promise<boolean> {

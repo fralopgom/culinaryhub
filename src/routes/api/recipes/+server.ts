@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import db from '$lib/server/db';
-import { walletCanPublish, dailyLimitReached } from '$lib/server/limits';
+import { walletCanPublish, prestigeCanPublish, dailyLimitReached } from '$lib/server/limits';
 import { contentHash } from '$lib/utils/hash';
 import { slugify } from '$lib/utils/slug';
 
@@ -69,7 +69,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			error(400, 'instructions_required');
 		}
 		if (!user.is_admin) {
-			if (!walletCanPublish(user.wallet_tier)) error(403, 'wallet_tier_insufficient');
+			if (!walletCanPublish(user.wallet_tier) && !prestigeCanPublish(user.prestige_score)) {
+				error(403, 'wallet_tier_insufficient');
+			}
 			if (await dailyLimitReached(user.id, user.wallet_tier, user.prestige_score)) {
 				error(429, 'daily_limit_reached');
 			}
