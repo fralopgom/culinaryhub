@@ -6,11 +6,7 @@ import db from '$lib/server/db';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) error(401);
 
-	const [author] = await db`
-		SELECT id, prestige_score, wallet_tier FROM users WHERE ethereum_address = ${locals.user.address}
-	`;
-	if (!author) error(401);
-	if (author.wallet_tier < 1) error(403, 'wallet_tier_insufficient');
+	const author = locals.user;
 
 	const { recipe_id, score, note } = await request.json();
 
