@@ -21,7 +21,7 @@
 <article class="card">
 	<a class="card-img-wrap" href="/{lang}/recipes/{recipe.slug}" tabindex="-1" aria-hidden="true">
 		<img src={imgSrc} alt={recipe.title} loading="lazy"
-			onerror={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackSrc; }} />
+			onerror={(e) => { const img = e.currentTarget as HTMLImageElement; img.onerror = null; img.src = fallbackSrc; }} />
 		{#if recipe.culture_name}
 			<span class="culture-pill">{recipe.culture_name}</span>
 		{/if}
