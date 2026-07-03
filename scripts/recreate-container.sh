@@ -17,6 +17,7 @@ docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 docker run -d \
   --name "$CONTAINER" \
+  --network app-mycert_default \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
   -p 3001:3000 \

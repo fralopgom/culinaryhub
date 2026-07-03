@@ -105,7 +105,7 @@ Tables: `users`, `sessions`, `recipes`, `recipe_versions`, `ingredients`, `recip
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string — use `.87` IP (mycert container LAN IP), not `.30` (NAS host) |
+| `DATABASE_URL` | PostgreSQL connection string — use host `postgres-shared` (container name, resolves via Docker DNS on the `app-mycert_default` network — see `scripts/recreate-container.sh`), not a LAN IP. The IP (`.87`→`.95`→`.96` over time via qnet-dhcp) is unstable across NAS reboots/recreations and caused real outages (T-15 in Sygnet's ARCHITECTURE.log) before this fix (2026-07-03). |
 | `SYGNET_API_URL` | `https://mycert.myqnapcloud.com:8443` — Sygnet backend for wallet auth |
 | `SYGNET_SUITE_KEY` | Inter-suite auth key (sent as `X-Suite-Key` header to Sygnet API) |
 | `SESSION_SECRET` | Used for signing cookies |
